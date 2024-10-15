@@ -3,7 +3,7 @@ ifndef config
 endif
 
 CFLAGS := -Wall -Wextra -Werror -Wshadow -Wswitch-enum -Wconversion -pedantic \
-		  -fstack-protector -fsanitize=address,undefined
+		  -fstack-protector -fsanitize=undefined
 
 ifeq ($(config), debug)
     CFLAGS += -DDEBUG -DENABLE_ASSERTIONS -g -O0
@@ -13,7 +13,7 @@ endif
 
 BUILD_DIR := build/$(config)
 
-CLIENT_LIBS    := $(shell pkg-config --libs glfw3)
+CLIENT_LIBS    := $(shell pkg-config --libs glfw3 glew)
 CLIENT_SOURCES := $(wildcard client/*.cpp)
 CLIENT_OBJECTS := $(addprefix $(BUILD_DIR)/client/, $(addsuffix .cpp.o, $(basename $(notdir $(CLIENT_SOURCES)))))
 
