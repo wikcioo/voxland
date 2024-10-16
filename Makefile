@@ -27,10 +27,14 @@ SERVER_INCS    := -Icommon
 SERVER_SOURCES := $(wildcard server/*.cpp)
 SERVER_OBJECTS := $(addprefix $(BUILD_DIR)/server/, $(addsuffix .cpp.o, $(basename $(notdir $(SERVER_SOURCES)))))
 
-.PHONY: all client server clean
+COMMON_SOURCES := $(wildcard common/*.cpp)
+COMMON_OBJECTS := $(addprefix $(BUILD_DIR)/common/, $(addsuffix .cpp.o, $(basename $(notdir $(COMMON_SOURCES)))))
+
+.PHONY: all client server common clean
 
 all:
 	@echo "($(config)) Building all..."
+	@make --no-print-directory common
 	@make --no-print-directory client
 	@make --no-print-directory server
 
@@ -45,6 +49,11 @@ server:
 	@mkdir -p $(BUILD_DIR)/server
 	@make --no-print-directory $(BUILD_DIR)/server/server
 
+common:
+	@echo "($(config)) Building common..."
+	@mkdir -p $(BUILD_DIR)/common
+	@make --no-print-directory $(COMMON_OBJECTS)
+
 # Client targets
 $(BUILD_DIR)/client/client: $(CLIENT_OBJECTS)
 	$(CXX) $^ $(CFLAGS) $(CLIENT_LIBS) -o $@
@@ -56,11 +65,15 @@ $(BUILD_DIR)/client/lib/lib%.so: client/lib/%.cpp
 	$(CXX) $(CLIENT_SO_INCS) -shared -fPIC $< -o $@
 
 # Server targets
-$(BUILD_DIR)/server/server: $(SERVER_OBJECTS)
+$(BUILD_DIR)/server/server: $(SERVER_OBJECTS) $(COMMON_OBJECTS)
 	$(CXX) $^ $(CFLAGS) $(SERVER_LIBS) -o $@
 
 $(BUILD_DIR)/server/%.cpp.o: server/%.cpp
 	$(CXX) -c $< $(SERVER_INCS) $(CFLAGS) -o $@
+
+# Common targets
+$(BUILD_DIR)/common/%.cpp.o: common/%.cpp
+	$(CXX) -c $< $(CFLAGS) -o $@
 
 clean:
 	rm -rf $(BUILD_DIR)
