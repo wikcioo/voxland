@@ -1,5 +1,4 @@
 #include <stdio.h>
-#include <stdint.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <dlfcn.h>
@@ -7,6 +6,7 @@
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 
+#include "defines.h"
 #include "game.h"
 
 Game game = {};
@@ -45,12 +45,12 @@ bool reload_libgame(void)
     return true;
 }
 
-static void glfw_error_callback(int code, const char *description)
+LOCAL void glfw_error_callback(i32 code, const char *description)
 {
     fprintf(stderr, "error: glfw error (%d): %s\n", code, description);
 }
 
-static void glfw_framebuffer_size_callback(GLFWwindow *window, int width, int height)
+LOCAL void glfw_framebuffer_size_callback(GLFWwindow *window, i32 width, i32 height)
 {
     UNUSED(window);
     glViewport(0, 0, width, height);
@@ -58,7 +58,7 @@ static void glfw_framebuffer_size_callback(GLFWwindow *window, int width, int he
     game.current_window_height = height;
 }
 
-static void glfw_key_callback(GLFWwindow *window, int key, int scancode, int action, int mods)
+LOCAL void glfw_key_callback(GLFWwindow *window, i32 key, i32 scancode, i32 action, i32 mods)
 {
     UNUSED(window);
     UNUSED(scancode);
@@ -66,7 +66,7 @@ static void glfw_key_callback(GLFWwindow *window, int key, int scancode, int act
 
     if (key == GLFW_KEY_P && action == GLFW_PRESS) {
         game.is_polygon_mode = !game.is_polygon_mode;
-        int32_t mode = game.is_polygon_mode ? GL_LINE : GL_FILL;
+        i32 mode = game.is_polygon_mode ? GL_LINE : GL_FILL;
         glPolygonMode(GL_FRONT_AND_BACK, mode);
     } else if (key == GLFW_KEY_R && action == GLFW_PRESS) {
         if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) {
@@ -78,25 +78,25 @@ static void glfw_key_callback(GLFWwindow *window, int key, int scancode, int act
     }
 }
 
-static void glfw_mouse_moved_callback(GLFWwindow *window, double xpos, double ypos)
+LOCAL void glfw_mouse_moved_callback(GLFWwindow *window, f64 xpos, f64 ypos)
 {
     UNUSED(window);
 
-    static bool first_mouse_move = true;
-    static float last_x, last_y;
+    PERSIST bool first_mouse_move = true;
+    PERSIST f32 last_x, last_y;
 
     if (first_mouse_move) {
-        last_x = (float) xpos;
-        last_y = (float) ypos;
+        last_x = (f32) xpos;
+        last_y = (f32) ypos;
         first_mouse_move = false;
     }
 
-    float xoffset = (float) xpos - last_x;
-    float yoffset = last_y - (float) ypos;
-    last_x = (float) xpos;
-    last_y = (float) ypos;
+    f32 xoffset = (f32) xpos - last_x;
+    f32 yoffset = last_y - (f32) ypos;
+    last_x = (f32) xpos;
+    last_y = (f32) ypos;
 
-    static float sensitivity = 0.1f;
+    PERSIST f32 sensitivity = 0.1f;
     xoffset *= sensitivity;
     yoffset *= sensitivity;
 
@@ -153,7 +153,7 @@ int main(void)
 
     glfwSetInputMode(game.window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
-    uint32_t err = glewInit();
+    u32 err = glewInit();
     if (err != GLEW_OK) {
         fprintf(stderr, "error: failed to initialize glew: %s\n", glewGetErrorString(err));
         glfwDestroyWindow(game.window);
@@ -176,7 +176,7 @@ int main(void)
     game_init(&game);
 
     while (!glfwWindowShouldClose(game.window)) {
-        float now = (float) glfwGetTime();
+        f32 now = (f32) glfwGetTime();
         game.delta_time = now - game.last_time;
         game.last_time = now;
 

@@ -65,13 +65,13 @@ const char *fragment_shader_lighting_source =
     "    out_color = vec4(result, 1.0);\n"
     "}\n";
 
-uint32_t create_shader(uint32_t type, const char *source)
+u32 create_shader(u32 type, const char *source)
 {
-    uint32_t shader = glCreateShader(type);
+    u32 shader = glCreateShader(type);
     glShaderSource(shader, 1, (const GLchar **)&source, 0);
     glCompileShader(shader);
 
-    int is_compiled;
+    i32 is_compiled;
     glGetShaderiv(shader, GL_COMPILE_STATUS, &is_compiled);
     if (is_compiled == false) {
         char info_log[1024] = {0};
@@ -84,15 +84,15 @@ uint32_t create_shader(uint32_t type, const char *source)
     return shader;
 }
 
-uint32_t create_program(uint32_t vertex_shader, uint32_t fragment_shader)
+u32 create_program(u32 vertex_shader, u32 fragment_shader)
 {
-    uint32_t program = glCreateProgram();
+    u32 program = glCreateProgram();
 
     glAttachShader(program, vertex_shader);
     glAttachShader(program, fragment_shader);
     glLinkProgram(program);
 
-    int is_linked;
+    i32 is_linked;
     glGetProgramiv(program, GL_LINK_STATUS, &is_linked);
     if (is_linked == false) {
         char info_log[1024];
@@ -109,8 +109,8 @@ uint32_t create_program(uint32_t vertex_shader, uint32_t fragment_shader)
 
 void process_input(Game *game)
 {
-    static float velocity = 5.0f;
-    float speed = game->delta_time * velocity;
+    PERSIST f32 velocity = 5.0f;
+    f32 speed = game->delta_time * velocity;
 
     glm::vec3 camera_right = glm::normalize(glm::cross(game->camera_direction, game->camera_up));
 
@@ -148,13 +148,13 @@ void game_init(Game *game)
     game->flat_color_shader = 0;
     game->lighting_shader = 0;
 
-    uint32_t vertex_shader = create_shader(GL_VERTEX_SHADER, vertex_shader_source);
-    uint32_t fragment_shader = create_shader(GL_FRAGMENT_SHADER, fragment_shader_source);
-    uint32_t fragment_shader_lighting = create_shader(GL_FRAGMENT_SHADER, fragment_shader_lighting_source);
+    u32 vertex_shader = create_shader(GL_VERTEX_SHADER, vertex_shader_source);
+    u32 fragment_shader = create_shader(GL_FRAGMENT_SHADER, fragment_shader_source);
+    u32 fragment_shader_lighting = create_shader(GL_FRAGMENT_SHADER, fragment_shader_lighting_source);
     game->flat_color_shader = create_program(vertex_shader, fragment_shader);
     game->lighting_shader = create_program(vertex_shader, fragment_shader_lighting);
 
-    float vertices[] = {
+    f32 vertices[] = {
         -0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
          0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
          0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
@@ -205,10 +205,10 @@ void game_init(Game *game)
     glBindBuffer(GL_ARRAY_BUFFER, game->vbo);
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
 
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (const void *) 0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(f32), (const void *) 0);
     glEnableVertexAttribArray(0);
 
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (const void *) (3 * sizeof(float)));
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(f32), (const void *) (3 * sizeof(f32)));
     glEnableVertexAttribArray(1);
 
     glEnable(GL_DEPTH_TEST);
@@ -221,12 +221,12 @@ void game_update(Game *game)
 
     process_input(game);
 
-    glm::mat4 projection = glm::perspective(glm::radians(game->camera_fov), (float) game->current_window_width / (float) game->current_window_height, 0.1f, 100.0f);
+    glm::mat4 projection = glm::perspective(glm::radians(game->camera_fov), (f32) game->current_window_width / (f32) game->current_window_height, 0.1f, 100.0f);
     glm::mat4 view = glm::lookAt(game->camera_position, game->camera_position + game->camera_direction, game->camera_up);
 
-    float light_speed = 1.0f;
-    float radius = 5.0f;
-    float now = (float) glfwGetTime();
+    f32 light_speed = 1.0f;
+    f32 radius = 5.0f;
+    f32 now = (f32) glfwGetTime();
     glm::vec3 light_position = glm::vec3(glm::cos(now * light_speed) * radius, 3.0f, glm::sin(now * light_speed) * radius);
 
     {

@@ -4,7 +4,7 @@
 
 #include <glm/glm.hpp>
 
-#define UNUSED(x) ((void) x)
+#include "defines.h"
 
 #define WINDOW_WIDTH 1280
 #define WINDOW_HEIGHT 720
@@ -13,20 +13,20 @@ struct GLFWwindow;
 
 typedef struct {
     GLFWwindow *window;
-    uint32_t current_window_width;
-    uint32_t current_window_height;
+    u32 current_window_width;
+    u32 current_window_height;
     bool is_polygon_mode;
-    float delta_time;
-    float last_time;
+    f32 delta_time;
+    f32 last_time;
     glm::vec3 camera_position;
     glm::vec3 camera_direction;
     glm::vec3 camera_up;
-    float camera_fov;
-    float camera_pitch;
-    float camera_yaw;
-    uint32_t vao, vbo;
-    uint32_t flat_color_shader;
-    uint32_t lighting_shader;
+    f32 camera_fov;
+    f32 camera_pitch;
+    f32 camera_yaw;
+    u32 vao, vbo;
+    u32 flat_color_shader;
+    u32 lighting_shader;
 } Game;
 
 typedef void (*pfn_game_init)(Game *game);

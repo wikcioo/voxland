@@ -14,14 +14,16 @@ endif
 BUILD_DIR := build/$(config)
 
 CLIENT_LIBS    := $(shell pkg-config --libs glfw3 glew)
-CLIENT_INCS    := -Iclient/lib
+CLIENT_INCS    := -Iclient/lib -Icommon
 CLIENT_SOURCES := $(wildcard client/*.cpp)
 CLIENT_OBJECTS := $(addprefix $(BUILD_DIR)/client/, $(addsuffix .cpp.o, $(basename $(notdir $(CLIENT_SOURCES)))))
 
+CLIENT_SO_INCS    := -Icommon
 CLIENT_SO_SOURCES := $(wildcard client/lib/*.cpp)
 CLIENT_SO_OBJECTS := $(addprefix $(BUILD_DIR)/client/lib/, $(addprefix lib, $(addsuffix .so, $(basename $(notdir $(CLIENT_SO_SOURCES))))))
 
 SERVER_LIBS    :=
+SERVER_INCS    := -Icommon
 SERVER_SOURCES := $(wildcard server/*.cpp)
 SERVER_OBJECTS := $(addprefix $(BUILD_DIR)/server/, $(addsuffix .cpp.o, $(basename $(notdir $(SERVER_SOURCES)))))
 
@@ -51,14 +53,14 @@ $(BUILD_DIR)/client/%.cpp.o: client/%.cpp
 	$(CXX) -c $< $(CLIENT_INCS) $(CFLAGS) -o $@
 
 $(BUILD_DIR)/client/lib/lib%.so: client/lib/%.cpp
-	$(CXX) -shared -fPIC $< -o $@
+	$(CXX) $(CLIENT_SO_INCS) -shared -fPIC $< -o $@
 
 # Server targets
 $(BUILD_DIR)/server/server: $(SERVER_OBJECTS)
 	$(CXX) $^ $(CFLAGS) $(SERVER_LIBS) -o $@
 
 $(BUILD_DIR)/server/%.cpp.o: server/%.cpp
-	$(CXX) -c $< $(CFLAGS) -o $@
+	$(CXX) -c $< $(SERVER_INCS) $(CFLAGS) -o $@
 
 clean:
 	rm -rf $(BUILD_DIR)
