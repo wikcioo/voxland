@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <assert.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <netdb.h>
@@ -83,10 +84,49 @@ void handle_client_event(i32 client_socket)
 #endif
 }
 
+LOCAL char *shift(int *argc, char ***argv)
+{
+    assert(*argc > 0);
+    char *result = **argv;
+    *argc -= 1;
+    *argv += 1;
+    return result;
+}
+
+LOCAL void usage(FILE *stream, const char *const program)
+{
+    fprintf(stream, "usage: %s -p <port> [-h]\n", program);
+}
+
 int main(int argc, char **argv)
 {
-    if (argc != 2) {
-        fprintf(stderr, "usage: %s port\n", argv[0]);
+    const char *const program = shift(&argc, &argv);
+    const char *port_as_cstr = NULL;
+
+    while (argc > 0) {
+        const char *flag = shift(&argc, &argv);
+
+        if (strcmp(flag, "-p") == 0) {
+            if (argc == 0) {
+                fprintf(stderr, "error: missing argument for flag `%s`\n", flag);
+                usage(stderr, program);
+                exit(EXIT_FAILURE);
+            }
+
+            port_as_cstr = shift(&argc, &argv);
+        } else if (strcmp(flag, "-h") == 0) {
+            usage(stdout, program);
+            exit(EXIT_SUCCESS);
+        } else {
+            fprintf(stderr, "error: unknown flag `%s`\n", flag);
+            usage(stderr, program);
+            exit(EXIT_FAILURE);
+        }
+    }
+
+    if (port_as_cstr == NULL) {
+        fprintf(stderr, "error: port argument missing\n");
+        usage(stderr, program);
         exit(EXIT_FAILURE);
     }
 
@@ -102,7 +142,7 @@ int main(int argc, char **argv)
     hints.ai_family = AF_UNSPEC;
     hints.ai_flags = AI_PASSIVE;
 
-    i32 status = getaddrinfo(NULL, argv[1], &hints, &result);
+    i32 status = getaddrinfo(NULL, port_as_cstr, &hints, &result);
     if (status != 0) {
         fprintf(stderr, "getaddrinfo error: %s\n", gai_strerror(status));
         exit(EXIT_FAILURE);
@@ -135,7 +175,7 @@ int main(int argc, char **argv)
     }
 
     if (rp == NULL) {
-        fprintf(stderr, "could not bind to port %s\n", argv[1]);
+        fprintf(stderr, "could not bind to port %s\n", port_as_cstr);
         exit(EXIT_FAILURE);
     }
 
@@ -145,7 +185,7 @@ int main(int argc, char **argv)
     } else {
         char ip_buffer[INET6_ADDRSTRLEN] = {0};
         inet_ntop(rp->ai_family, get_in_addr(rp->ai_addr), ip_buffer, INET6_ADDRSTRLEN);
-        fprintf(stderr, "socket listening on %s port %s\n", ip_buffer, argv[1]);
+        fprintf(stderr, "socket listening on %s port %s\n", ip_buffer, port_as_cstr);
     }
 
     freeaddrinfo(result);
