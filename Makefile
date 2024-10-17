@@ -2,13 +2,13 @@ ifndef config
     config=debug
 endif
 
-CFLAGS := -Wall -Wextra -Werror -Wshadow -Wswitch-enum -Wconversion -pedantic \
-		  -fstack-protector -fsanitize=undefined
+CXXFLAGS := -Wall -Wextra -Werror -Wshadow -Wswitch-enum -Wconversion -pedantic \
+			-fstack-protector -fsanitize=undefined
 
 ifeq ($(config), debug)
-    CFLAGS += -DDEBUG -DENABLE_ASSERTIONS -g -O0
+    CXXFLAGS += -DDEBUG -g -O0
 else ifeq ($(config), release)
-    CFLAGS += -DNDEBUG -O3
+    CXXFLAGS += -DNDEBUG -DENABLE_ASSERTIONS=0 -O3
 endif
 
 BUILD_DIR := build/$(config)
@@ -56,24 +56,24 @@ common:
 
 # Client targets
 $(BUILD_DIR)/client/client: $(CLIENT_OBJECTS) $(COMMON_OBJECTS)
-	$(CXX) $^ $(CFLAGS) $(CLIENT_LIBS) -o $@
+	$(CXX) $^ $(CXXFLAGS) $(CLIENT_LIBS) -o $@
 
 $(BUILD_DIR)/client/%.cpp.o: client/%.cpp
-	$(CXX) -c $< $(CLIENT_INCS) $(CFLAGS) -o $@
+	$(CXX) -c $< $(CLIENT_INCS) $(CXXFLAGS) -o $@
 
 $(BUILD_DIR)/client/lib/lib%.so: client/lib/%.cpp $(COMMON_OBJECTS)
 	$(CXX) $(CLIENT_SO_INCS) -shared -fPIC $^ -o $@
 
 # Server targets
 $(BUILD_DIR)/server/server: $(SERVER_OBJECTS) $(COMMON_OBJECTS)
-	$(CXX) $^ $(CFLAGS) $(SERVER_LIBS) -o $@
+	$(CXX) $^ $(CXXFLAGS) $(SERVER_LIBS) -o $@
 
 $(BUILD_DIR)/server/%.cpp.o: server/%.cpp
-	$(CXX) -c $< $(SERVER_INCS) $(CFLAGS) -o $@
+	$(CXX) -c $< $(SERVER_INCS) $(CXXFLAGS) -o $@
 
 # Common targets
 $(BUILD_DIR)/common/%.cpp.o: common/%.cpp
-	$(CXX) -c -fPIC $< $(CFLAGS) -o $@
+	$(CXX) -c -fPIC $< $(CXXFLAGS) -o $@
 
 clean:
 	rm -rf $(BUILD_DIR)

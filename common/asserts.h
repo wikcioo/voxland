@@ -10,7 +10,11 @@
 
 void report_assertion_failure(const char *expression, const char *message, const char *file, i32 line);
 
-#if defined(ENABLE_ASSERTIONS)
+#ifndef ENABLE_ASSERTIONS
+    #define ENABLE_ASSERTIONS 1
+#endif
+
+#if ENABLE_ASSERTIONS
     #define ASSERT(expr)                                                \
         {                                                               \
             if (!(expr)) {                                              \

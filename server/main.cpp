@@ -130,7 +130,7 @@ void handle_new_connection_request_event(void)
     u16 port = client_addr.ss_family == AF_INET ?
                ((struct sockaddr_in *)&client_addr)->sin_port :
                ((struct sockaddr_in6 *)&client_addr)->sin6_port;
-
+    UNUSED(port);
     LOG_INFO("new connection from %s:%hu\n", client_ip, port);
 
     if (!check_ip_allowed(client_ip)) {
@@ -208,11 +208,11 @@ LOCAL bool db_table_exists(sqlite3 *db, const char *table_name)
     return rc == SQLITE_ROW;
 }
 
-LOCAL bool db_verify_tables(sqlite3 *db, const char *database_filepath)
+LOCAL bool db_verify_tables(sqlite3 *db)
 {
     ASSERT(db != NULL);
 
-    LOG_INFO("verifying `%s` database tables\n", database_filepath);
+    LOG_INFO("verifying database tables\n");
 
     if (!db_table_exists(db, "ip_blacklist")) {
         const char *sql_create_ip_blacklist_table =
@@ -373,7 +373,7 @@ int main(int argc, char **argv)
         exit(EXIT_FAILURE);
     }
 
-    if (!db_verify_tables(server_db, database_filepath)) {
+    if (!db_verify_tables(server_db)) {
         LOG_FATAL("database verification failed\n");
         sqlite3_close(server_db);
         exit(EXIT_FAILURE);
@@ -415,6 +415,7 @@ int main(int argc, char **argv)
                                  rp->ai_family == AF_INET6 ? "IPv6" : "UNKNOWN";
         const char *socktype_str = rp->ai_socktype == SOCK_STREAM ? "TCP" :
                                    rp->ai_socktype == SOCK_DGRAM  ? "UDP" : "UNKNOWN";
+        UNUSED(ip_version); UNUSED(socktype_str);
         LOG_INFO("successfully created an %s %s socket(fd=%d)\n", ip_version, socktype_str, server_socket);
 
         PERSIST i32 yes = 1;

@@ -35,10 +35,18 @@ void log_message(log_level_e level, const char *message, ...)
 void report_assertion_failure(const char *expression, const char *message, const char *file, i32 line)
 {
     bool with_msg = message != NULL;
-    LOG_FATAL("assertion failure for expression `%s`%s%s%s in %s:%d",
-              expression,
-              with_msg ? " with message `" : "",
-              with_msg ? message : "",
-              with_msg ? "`" : "",
-              file, line);
+    char formatted[256] = {};
+    snprintf(formatted, sizeof(formatted),
+             "assertion failure for expression `%s`%s%s%s in %s:%d\n",
+             expression,
+             with_msg ? " with message `" : "",
+             with_msg ? message : "",
+             with_msg ? "`" : "",
+             file, line);
+
+#if ENABLE_FATAL_LOG
+    LOG_FATAL("%s", formatted);
+#else
+    fprintf(stderr, "%s", formatted);
+#endif
 }

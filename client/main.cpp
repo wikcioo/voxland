@@ -68,6 +68,7 @@ bool reload_libgame(void)
 
 LOCAL void glfw_error_callback(i32 code, const char *description)
 {
+    UNUSED(code); UNUSED(description);
     LOG_ERROR("glfw error (%d): %s\n", code, description);
 }
 
@@ -377,7 +378,7 @@ int main(int argc, char **argv)
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_SAMPLES, 4);
 
-    const char *glfw_version = glfwGetVersionString();
+    const char *glfw_version = glfwGetVersionString(); UNUSED(glfw_version);
     LOG_INFO("glfw version: %s\n", glfw_version);
 
     game.window = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "voxland client", NULL, NULL);
@@ -403,10 +404,10 @@ int main(int argc, char **argv)
     }
 
     {
-        const unsigned char *gl_vendor = glGetString(GL_VENDOR);
-        const unsigned char *gl_renderer = glGetString(GL_RENDERER);
-        const unsigned char *gl_version = glGetString(GL_VERSION);
-        const unsigned char *glsl_version = glGetString(GL_SHADING_LANGUAGE_VERSION);
+        const unsigned char *gl_vendor    = glGetString(GL_VENDOR); UNUSED(gl_vendor);
+        const unsigned char *gl_renderer  = glGetString(GL_RENDERER); UNUSED(gl_renderer);
+        const unsigned char *gl_version   = glGetString(GL_VERSION); UNUSED(gl_version);
+        const unsigned char *glsl_version = glGetString(GL_SHADING_LANGUAGE_VERSION); UNUSED(glsl_version);
         LOG_INFO("graphics info:\n");
         LOG_INFO("  - vendor: %s\n", gl_vendor);
         LOG_INFO("  - renderer: %s\n", gl_renderer);
