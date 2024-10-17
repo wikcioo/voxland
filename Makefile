@@ -22,7 +22,7 @@ CLIENT_SO_INCS    := -Icommon
 CLIENT_SO_SOURCES := $(wildcard client/lib/*.cpp)
 CLIENT_SO_OBJECTS := $(addprefix $(BUILD_DIR)/client/lib/, $(addprefix lib, $(addsuffix .so, $(basename $(notdir $(CLIENT_SO_SOURCES))))))
 
-SERVER_LIBS    :=
+SERVER_LIBS    := $(shell pkg-config --libs sqlite3)
 SERVER_INCS    := -Icommon
 SERVER_SOURCES := $(wildcard server/*.cpp)
 SERVER_OBJECTS := $(addprefix $(BUILD_DIR)/server/, $(addsuffix .cpp.o, $(basename $(notdir $(SERVER_SOURCES)))))

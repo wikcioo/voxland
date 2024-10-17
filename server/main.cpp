@@ -5,11 +5,13 @@
 #include <assert.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <netdb.h>
 #include <unistd.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <signal.h>
+#include <sqlite3.h>
 
 #include "defines.h"
 #include "hexdump.h"
@@ -17,10 +19,12 @@
 
 #define SERVER_BACKLOG 10
 #define INPUT_BUFFER_SIZE 1024
+#define DEFAULT_DATABASE_FILEPATH "db"
 
 LOCAL bool running;
 LOCAL i32 server_socket;
 LOCAL pollfd_set_t server_pfds;
+LOCAL sqlite3 *server_db = NULL;
 
 void *get_in_addr(struct sockaddr *addr)
 {
@@ -84,6 +88,132 @@ void handle_client_event(i32 client_socket)
 #endif
 }
 
+LOCAL bool db_execute_sql(sqlite3 *db, const char *const sql)
+{
+    assert(db != NULL);
+
+    char *err = NULL;
+    i32 rc = sqlite3_exec(db, sql, 0, 0, &err);
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "error: failed to execute sql query: %s\n", err);
+        sqlite3_free(err);
+        return false;
+    }
+
+    return true;
+}
+
+LOCAL bool db_table_exists(sqlite3 *db, const char *table_name)
+{
+    assert(db != NULL);
+
+    char sql[256] = {0};
+    snprintf(sql, sizeof(sql), "SELECT name FROM sqlite_master WHERE type='table' AND name='%s';", table_name);
+
+    sqlite3_stmt *stmt;
+    i32 rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "error: failed to prepare statement: %s\n", sqlite3_errmsg(db));
+        return false;
+    }
+
+    rc = sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+
+    return rc == SQLITE_ROW;
+}
+
+LOCAL bool db_verify_tables(sqlite3 *db, const char *database_filepath)
+{
+    assert(db != NULL);
+
+    printf("verifying `%s` database tables\n", database_filepath);
+
+    if (!db_table_exists(db, "ip_blacklist")) {
+        const char *sql_create_ip_blacklist_table =
+            "CREATE TABLE ip_blacklist (\n"
+            "    id INTEGER PRIMARY KEY AUTOINCREMENT,\n"
+            "    ip_address TEXT NOT NULL UNIQUE,\n"
+            "    description TEXT,\n"
+            "    created_at DATETIME DEFAULT (DATETIME('now', 'localtime'))\n"
+            ");";
+
+        printf("creating 'ip_blacklist' table...");
+        if (!db_execute_sql(db, sql_create_ip_blacklist_table)) {
+            printf(" ERROR\n");
+            return false;
+        } else {
+            printf(" OK\n");
+        }
+    }
+
+    printf("database verification completed successfully\n");
+    return true;
+}
+
+LOCAL bool db_print_query_result(FILE *stream, sqlite3 *db, const char *const sql)
+{
+    assert(db != NULL);
+
+    sqlite3_stmt *stmt;
+    i32 rc;
+
+    rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "error: failed to prepare stetement: %s\n", sqlite3_errmsg(db));
+        return false;
+    }
+
+    fprintf(stream, "sql query:\n");
+    fprintf(stream, "  %s\n", sql);
+    fprintf(stream, "results:\n  ");
+
+    i32 cols = sqlite3_column_count(stmt);
+    for (i32 i = 0; i < cols; i++) {
+        const char *column_name = sqlite3_column_name(stmt, i);
+        fprintf(stream, "%s ", column_name);
+    }
+    fprintf(stream, "\n");
+
+    while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
+        fprintf(stream, "  ");
+        for (i32 i = 0; i < cols; i++) {
+            i32 col_type = sqlite3_column_type(stmt, i);
+            switch (col_type) {
+            case SQLITE_INTEGER:
+                fprintf(stream, "%d", sqlite3_column_int(stmt, i));
+                break;
+            case SQLITE_FLOAT:
+                fprintf(stream, "%f", sqlite3_column_double(stmt, i));
+                break;
+            case SQLITE_TEXT:
+                fprintf(stream, "\"%s\"", sqlite3_column_text(stmt, i));
+                break;
+            case SQLITE_BLOB:
+                fprintf(stream, "(BLOB)");
+                break;
+            case SQLITE_NULL:
+                fprintf(stream, "NULL");
+                break;
+            default:
+                fprintf(stream, "???");
+                fprintf(stderr, "error: unknown sql data type with value `%d`\n", col_type);
+                break;
+            }
+            fprintf(stream, " ");
+        }
+        fprintf(stream, "\n");
+    }
+
+    if (rc != SQLITE_DONE) {
+        fprintf(stderr, "error: failed to execute statement: %s\n", sqlite3_errmsg(db));
+        return false;
+    }
+
+    sqlite3_finalize(stmt);
+    return true;
+}
+
 LOCAL char *shift(int *argc, char ***argv)
 {
     assert(*argc > 0);
@@ -95,13 +225,14 @@ LOCAL char *shift(int *argc, char ***argv)
 
 LOCAL void usage(FILE *stream, const char *const program)
 {
-    fprintf(stream, "usage: %s -p <port> [-h]\n", program);
+    fprintf(stream, "usage: %s -p <port> [-d <database_filepath>] [-h]\n", program);
 }
 
 int main(int argc, char **argv)
 {
     const char *const program = shift(&argc, &argv);
     const char *port_as_cstr = NULL;
+    const char *database_filepath = NULL;
 
     while (argc > 0) {
         const char *flag = shift(&argc, &argv);
@@ -114,6 +245,14 @@ int main(int argc, char **argv)
             }
 
             port_as_cstr = shift(&argc, &argv);
+        } else if (strcmp(flag, "-d") == 0) {
+            if (argc == 0) {
+                fprintf(stderr, "error: missing argument for flag `%s`\n", flag);
+                usage(stderr, program);
+                exit(EXIT_FAILURE);
+            }
+
+            database_filepath = shift(&argc, &argv);
         } else if (strcmp(flag, "-h") == 0) {
             usage(stdout, program);
             exit(EXIT_SUCCESS);
@@ -127,6 +266,39 @@ int main(int argc, char **argv)
     if (port_as_cstr == NULL) {
         fprintf(stderr, "error: port argument missing\n");
         usage(stderr, program);
+        exit(EXIT_FAILURE);
+    }
+
+    if (database_filepath == NULL) {
+        if (mkdir(DEFAULT_DATABASE_FILEPATH, 0777) == -1) {
+            if (errno != EEXIST) {
+                fprintf(stderr, "error: could not create directory `%s`: %s\n",
+                        DEFAULT_DATABASE_FILEPATH, strerror(errno));
+                exit(EXIT_FAILURE);
+            }
+        } else {
+            printf("created database directory `%s`\n", DEFAULT_DATABASE_FILEPATH);
+        }
+        database_filepath = DEFAULT_DATABASE_FILEPATH"/default.db";
+    }
+
+    if (sqlite3_open(database_filepath, &server_db) != SQLITE_OK) {
+        fprintf(stderr, "error: cannot open database `%s`: %s\n", database_filepath, sqlite3_errmsg(server_db));
+        sqlite3_close(server_db);
+        exit(EXIT_FAILURE);
+    }
+
+    if (!db_verify_tables(server_db, database_filepath)) {
+        fprintf(stderr, "error: database verification failed\n");
+        sqlite3_close(server_db);
+        exit(EXIT_FAILURE);
+    }
+
+    // TEMP: print blacklisted ip addresses found in the database
+    const char *sql_select_all_blacklisted_ips = "SELECT * FROM ip_blacklist;";
+    if (!db_print_query_result(stdout, server_db, sql_select_all_blacklisted_ips)) {
+        fprintf(stderr, "error: failed to execute query `%s`\n", sql_select_all_blacklisted_ips);
+        sqlite3_close(server_db);
         exit(EXIT_FAILURE);
     }
 
@@ -225,6 +397,8 @@ int main(int argc, char **argv)
     }
 
     printf("server shutting down\n");
+
+    sqlite3_close(server_db);
 
     pollfd_set_shutdown(&server_pfds);
 
