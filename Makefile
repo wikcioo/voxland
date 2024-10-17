@@ -55,14 +55,14 @@ common:
 	@make --no-print-directory $(COMMON_OBJECTS)
 
 # Client targets
-$(BUILD_DIR)/client/client: $(CLIENT_OBJECTS)
+$(BUILD_DIR)/client/client: $(CLIENT_OBJECTS) $(COMMON_OBJECTS)
 	$(CXX) $^ $(CFLAGS) $(CLIENT_LIBS) -o $@
 
 $(BUILD_DIR)/client/%.cpp.o: client/%.cpp
 	$(CXX) -c $< $(CLIENT_INCS) $(CFLAGS) -o $@
 
-$(BUILD_DIR)/client/lib/lib%.so: client/lib/%.cpp
-	$(CXX) $(CLIENT_SO_INCS) -shared -fPIC $< -o $@
+$(BUILD_DIR)/client/lib/lib%.so: client/lib/%.cpp $(COMMON_OBJECTS)
+	$(CXX) $(CLIENT_SO_INCS) -shared -fPIC $^ -o $@
 
 # Server targets
 $(BUILD_DIR)/server/server: $(SERVER_OBJECTS) $(COMMON_OBJECTS)
@@ -73,7 +73,7 @@ $(BUILD_DIR)/server/%.cpp.o: server/%.cpp
 
 # Common targets
 $(BUILD_DIR)/common/%.cpp.o: common/%.cpp
-	$(CXX) -c $< $(CFLAGS) -o $@
+	$(CXX) -c -fPIC $< $(CFLAGS) -o $@
 
 clean:
 	rm -rf $(BUILD_DIR)

@@ -8,6 +8,8 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
+#include "log.h"
+
 const char *vertex_shader_source =
     "#version 330 core\n"
     "layout(location = 0) in vec3 a_position;\n"
@@ -77,8 +79,8 @@ u32 create_shader(u32 type, const char *source)
         char info_log[1024] = {0};
         glGetShaderInfoLog(shader, 1024, 0, info_log);
         const char *shader_type_as_cstr = type == GL_VERTEX_SHADER ? "vertex" : (type == GL_FRAGMENT_SHADER ? "fragment" : "unknown");
-        fprintf(stderr, "error: failed to compile %s shader: %s\n", shader_type_as_cstr, info_log);
-        exit(1);
+        LOG_FATAL("failed to compile %s shader: %s\n", shader_type_as_cstr, info_log);
+        exit(EXIT_FAILURE);
     }
 
     return shader;
@@ -97,8 +99,8 @@ u32 create_program(u32 vertex_shader, u32 fragment_shader)
     if (is_linked == false) {
         char info_log[1024];
         glGetProgramInfoLog(program, 1024, 0, info_log);
-        fprintf(stderr, "error: failed to link program: %s\n", info_log);
-        exit(1);
+        LOG_FATAL("failed to link program: %s\n", info_log);
+        exit(EXIT_FAILURE);
     }
 
     glDeleteShader(vertex_shader);

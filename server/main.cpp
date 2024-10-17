@@ -13,6 +13,7 @@
 #include <signal.h>
 #include <sqlite3.h>
 
+#include "log.h"
 #include "defines.h"
 #include "hexdump.h"
 #include "pollfd_set.h"
@@ -48,7 +49,7 @@ void handle_new_connection_request_event(void)
 
     i32 client_socket = accept(server_socket, (struct sockaddr *)&client_addr, &client_addr_len);
     if (client_socket == -1) {
-        fprintf(stderr, "accept error: %s\n", strerror(errno));
+        LOG_ERROR("accept error: %s\n", strerror(errno));
         return;
     }
 
@@ -62,7 +63,7 @@ void handle_new_connection_request_event(void)
                ((struct sockaddr_in *)&client_addr)->sin_port :
                ((struct sockaddr_in6 *)&client_addr)->sin6_port;
 
-    printf("new connection from %s:%hu\n", client_ip, port);
+    LOG_INFO("new connection from %s:%hu\n", client_ip, port);
 
     pollfd_set_add(&server_pfds, client_socket);
 }
@@ -73,17 +74,17 @@ void handle_client_event(i32 client_socket)
     i64 bytes_read = recv(client_socket, buffer, INPUT_BUFFER_SIZE, 0);
     if (bytes_read <= 0) {
         if (bytes_read == 0) {
-            printf("client with socketfd = %d performed orderly shutdown\n", client_socket);
+            LOG_INFO("client with socketfd = %d performed orderly shutdown\n", client_socket);
             pollfd_set_remove(&server_pfds, client_socket);
             close(client_socket);
         } else {
-            fprintf(stderr, "recv error: %s\n", strerror(errno));
+            LOG_ERROR("recv error: %s\n", strerror(errno));
         }
         return;
     }
 
 #if 0
-    printf("read %lld bytes of data:\n", bytes_read);
+    LOG_DEBUG("read %lld bytes of data:\n", bytes_read);
     hexdump(stdout, buffer, bytes_read, HEXDUMP_FLAG_CANONICAL);
 #endif
 }
@@ -95,7 +96,7 @@ LOCAL bool db_execute_sql(sqlite3 *db, const char *const sql)
     char *err = NULL;
     i32 rc = sqlite3_exec(db, sql, 0, 0, &err);
     if (rc != SQLITE_OK) {
-        fprintf(stderr, "error: failed to execute sql query: %s\n", err);
+        LOG_ERROR("failed to execute sql query: %s\n", err);
         sqlite3_free(err);
         return false;
     }
@@ -113,7 +114,7 @@ LOCAL bool db_table_exists(sqlite3 *db, const char *table_name)
     sqlite3_stmt *stmt;
     i32 rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
     if (rc != SQLITE_OK) {
-        fprintf(stderr, "error: failed to prepare statement: %s\n", sqlite3_errmsg(db));
+        LOG_ERROR("failed to prepare statement: %s\n", sqlite3_errmsg(db));
         return false;
     }
 
@@ -127,7 +128,7 @@ LOCAL bool db_verify_tables(sqlite3 *db, const char *database_filepath)
 {
     assert(db != NULL);
 
-    printf("verifying `%s` database tables\n", database_filepath);
+    LOG_INFO("verifying `%s` database tables\n", database_filepath);
 
     if (!db_table_exists(db, "ip_blacklist")) {
         const char *sql_create_ip_blacklist_table =
@@ -138,16 +139,16 @@ LOCAL bool db_verify_tables(sqlite3 *db, const char *database_filepath)
             "    created_at DATETIME DEFAULT (DATETIME('now', 'localtime'))\n"
             ");";
 
-        printf("creating 'ip_blacklist' table...");
+        LOG_INFO("creating 'ip_blacklist' table...");
         if (!db_execute_sql(db, sql_create_ip_blacklist_table)) {
-            printf(" ERROR\n");
+            printf(ERROR_COLOR " ERROR" RESET_COLOR "\n");
             return false;
         } else {
-            printf(" OK\n");
+            printf(INFO_COLOR " OK" RESET_COLOR "\n");
         }
     }
 
-    printf("database verification completed successfully\n");
+    LOG_INFO("database verification completed successfully\n");
     return true;
 }
 
@@ -160,7 +161,7 @@ LOCAL bool db_print_query_result(FILE *stream, sqlite3 *db, const char *const sq
 
     rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
     if (rc != SQLITE_OK) {
-        fprintf(stderr, "error: failed to prepare stetement: %s\n", sqlite3_errmsg(db));
+        LOG_ERROR("failed to prepare stetement: %s\n", sqlite3_errmsg(db));
         return false;
     }
 
@@ -197,7 +198,7 @@ LOCAL bool db_print_query_result(FILE *stream, sqlite3 *db, const char *const sq
                 break;
             default:
                 fprintf(stream, "???");
-                fprintf(stderr, "error: unknown sql data type with value `%d`\n", col_type);
+                LOG_ERROR("unknown sql data type with value `%d`\n", col_type);
                 break;
             }
             fprintf(stream, " ");
@@ -206,7 +207,7 @@ LOCAL bool db_print_query_result(FILE *stream, sqlite3 *db, const char *const sq
     }
 
     if (rc != SQLITE_DONE) {
-        fprintf(stderr, "error: failed to execute statement: %s\n", sqlite3_errmsg(db));
+        LOG_ERROR("failed to execute statement: %s\n", sqlite3_errmsg(db));
         return false;
     }
 
@@ -239,7 +240,7 @@ int main(int argc, char **argv)
 
         if (strcmp(flag, "-p") == 0) {
             if (argc == 0) {
-                fprintf(stderr, "error: missing argument for flag `%s`\n", flag);
+                LOG_FATAL("missing argument for flag `%s`\n", flag);
                 usage(stderr, program);
                 exit(EXIT_FAILURE);
             }
@@ -247,7 +248,7 @@ int main(int argc, char **argv)
             port_as_cstr = shift(&argc, &argv);
         } else if (strcmp(flag, "-d") == 0) {
             if (argc == 0) {
-                fprintf(stderr, "error: missing argument for flag `%s`\n", flag);
+                LOG_FATAL("missing argument for flag `%s`\n", flag);
                 usage(stderr, program);
                 exit(EXIT_FAILURE);
             }
@@ -257,14 +258,14 @@ int main(int argc, char **argv)
             usage(stdout, program);
             exit(EXIT_SUCCESS);
         } else {
-            fprintf(stderr, "error: unknown flag `%s`\n", flag);
+            LOG_FATAL("unknown flag `%s`\n", flag);
             usage(stderr, program);
             exit(EXIT_FAILURE);
         }
     }
 
     if (port_as_cstr == NULL) {
-        fprintf(stderr, "error: port argument missing\n");
+        LOG_FATAL("port argument missing\n");
         usage(stderr, program);
         exit(EXIT_FAILURE);
     }
@@ -272,24 +273,24 @@ int main(int argc, char **argv)
     if (database_filepath == NULL) {
         if (mkdir(DEFAULT_DATABASE_FILEPATH, 0777) == -1) {
             if (errno != EEXIST) {
-                fprintf(stderr, "error: could not create directory `%s`: %s\n",
-                        DEFAULT_DATABASE_FILEPATH, strerror(errno));
+                LOG_FATAL("could not create directory `%s`: %s\n",
+                          DEFAULT_DATABASE_FILEPATH, strerror(errno));
                 exit(EXIT_FAILURE);
             }
         } else {
-            printf("created database directory `%s`\n", DEFAULT_DATABASE_FILEPATH);
+            LOG_INFO("created database directory `%s`\n", DEFAULT_DATABASE_FILEPATH);
         }
         database_filepath = DEFAULT_DATABASE_FILEPATH"/default.db";
     }
 
     if (sqlite3_open(database_filepath, &server_db) != SQLITE_OK) {
-        fprintf(stderr, "error: cannot open database `%s`: %s\n", database_filepath, sqlite3_errmsg(server_db));
+        LOG_FATAL("cannot open database `%s`: %s\n", database_filepath, sqlite3_errmsg(server_db));
         sqlite3_close(server_db);
         exit(EXIT_FAILURE);
     }
 
     if (!db_verify_tables(server_db, database_filepath)) {
-        fprintf(stderr, "error: database verification failed\n");
+        LOG_FATAL("database verification failed\n");
         sqlite3_close(server_db);
         exit(EXIT_FAILURE);
     }
@@ -297,14 +298,14 @@ int main(int argc, char **argv)
     // TEMP: print blacklisted ip addresses found in the database
     const char *sql_select_all_blacklisted_ips = "SELECT * FROM ip_blacklist;";
     if (!db_print_query_result(stdout, server_db, sql_select_all_blacklisted_ips)) {
-        fprintf(stderr, "error: failed to execute query `%s`\n", sql_select_all_blacklisted_ips);
+        LOG_FATAL("failed to execute query `%s`\n", sql_select_all_blacklisted_ips);
         sqlite3_close(server_db);
         exit(EXIT_FAILURE);
     }
 
     char hostname[256] = {0};
     gethostname(hostname, 256);
-    printf("starting the game server on host `%s`\n", hostname);
+    LOG_INFO("starting the game server on host `%s`\n", hostname);
 
     struct addrinfo hints;
     struct addrinfo *result, *rp;
@@ -316,7 +317,7 @@ int main(int argc, char **argv)
 
     i32 status = getaddrinfo(NULL, port_as_cstr, &hints, &result);
     if (status != 0) {
-        fprintf(stderr, "getaddrinfo error: %s\n", gai_strerror(status));
+        LOG_FATAL("getaddrinfo error: %s\n", gai_strerror(status));
         exit(EXIT_FAILURE);
     }
 
@@ -330,34 +331,34 @@ int main(int argc, char **argv)
                                  rp->ai_family == AF_INET6 ? "IPv6" : "UNKNOWN";
         const char *socktype_str = rp->ai_socktype == SOCK_STREAM ? "TCP" :
                                    rp->ai_socktype == SOCK_DGRAM  ? "UDP" : "UNKNOWN";
-        fprintf(stderr, "successfully created an %s %s socket(fd=%d)\n", ip_version, socktype_str, server_socket);
+        LOG_INFO("successfully created an %s %s socket(fd=%d)\n", ip_version, socktype_str, server_socket);
 
         PERSIST i32 yes = 1;
         if (setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, (void *)&yes, sizeof(i32)) == -1) {
-            fprintf(stderr, "setsockopt reuse address error: %s\n", strerror(errno));
+            LOG_ERROR("setsockopt reuse address error: %s\n", strerror(errno));
         }
 
         if (bind(server_socket, rp->ai_addr, rp->ai_addrlen) == 0) {
-            fprintf(stderr, "successfully bound socket(fd=%d)\n", server_socket);
+            LOG_INFO("successfully bound socket(fd=%d)\n", server_socket);
             break;
         } else {
-            fprintf(stderr, "failed to bind socket with fd=%d\n", server_socket);
+            LOG_ERROR("failed to bind socket with fd=%d\n", server_socket);
             close(server_socket);
         }
     }
 
     if (rp == NULL) {
-        fprintf(stderr, "could not bind to port %s\n", port_as_cstr);
+        LOG_FATAL("could not bind to port %s\n", port_as_cstr);
         exit(EXIT_FAILURE);
     }
 
     if (listen(server_socket, SERVER_BACKLOG) == -1) {
-        fprintf(stderr, "failed to start listening: %s\n", strerror(errno));
+        LOG_FATAL("failed to start listening: %s\n", strerror(errno));
         exit(EXIT_FAILURE);
     } else {
         char ip_buffer[INET6_ADDRSTRLEN] = {0};
         inet_ntop(rp->ai_family, get_in_addr(rp->ai_addr), ip_buffer, INET6_ADDRSTRLEN);
-        fprintf(stderr, "socket listening on %s port %s\n", ip_buffer, port_as_cstr);
+        LOG_INFO("socket listening on %s port %s\n", ip_buffer, port_as_cstr);
     }
 
     freeaddrinfo(result);
@@ -377,10 +378,10 @@ int main(int argc, char **argv)
 
         if (num_events == -1) {
             if (errno == EINTR) {
-                fprintf(stderr, "interrupted 'poll' system call\n");
+                LOG_INFO("interrupted 'poll' system call\n");
                 break;
             }
-            fprintf(stderr, "poll error: %s\n", strerror(errno));
+            LOG_FATAL("poll error: %s\n", strerror(errno));
             exit(EXIT_FAILURE);
         }
 
@@ -396,14 +397,14 @@ int main(int argc, char **argv)
         }
     }
 
-    printf("server shutting down\n");
+    LOG_INFO("server shutting down\n");
 
     sqlite3_close(server_db);
 
     pollfd_set_shutdown(&server_pfds);
 
     if (close(server_socket) == -1) {
-        fprintf(stderr, "error while closing the socket: %s\n", strerror(errno));
+        LOG_ERROR("error while closing the socket: %s\n", strerror(errno));
     }
 
     return EXIT_SUCCESS;

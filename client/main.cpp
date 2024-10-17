@@ -6,6 +6,7 @@
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 
+#include "log.h"
 #include "defines.h"
 #include "game.h"
 
@@ -22,21 +23,21 @@ bool reload_libgame(void)
 {
     if (libgame != NULL) {
         if (dlclose(libgame) != 0) {
-            fprintf(stderr, "error closing shared object: %s\n", dlerror());
+            LOG_ERROR("error closing shared object: %s\n", dlerror());
             return false;
         }
     }
 
     libgame = dlopen(libgame_filename, RTLD_NOW);
     if (libgame == NULL) {
-        fprintf(stderr, "error: dlopen could not load %s\n", dlerror());
+        LOG_ERROR("dlopen could not load %s\n", dlerror());
         return false;
     }
 
     #define X(name) \
         name = (pfn_##name) dlsym(libgame, #name); \
         if (name == NULL) { \
-            fprintf(stderr, "error: dlsym: %s\n", dlerror()); \
+            LOG_ERROR("dlsym: %s\n", dlerror()); \
             return false; \
         }
     LIST_OF_GAME_HRFN
@@ -47,7 +48,7 @@ bool reload_libgame(void)
 
 LOCAL void glfw_error_callback(i32 code, const char *description)
 {
-    fprintf(stderr, "error: glfw error (%d): %s\n", code, description);
+    LOG_ERROR("glfw error (%d): %s\n", code, description);
 }
 
 LOCAL void glfw_framebuffer_size_callback(GLFWwindow *window, i32 width, i32 height)
@@ -71,9 +72,10 @@ LOCAL void glfw_key_callback(GLFWwindow *window, i32 key, i32 scancode, i32 acti
     } else if (key == GLFW_KEY_R && action == GLFW_PRESS) {
         if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) {
             if (!reload_libgame()) {
-                exit(1);
+                LOG_FATAL("failed to reload libgame\n");
+                exit(EXIT_FAILURE);
             }
-            printf("successfully reloaded libgame\n");
+            LOG_INFO("successfully reloaded libgame\n");
         }
     }
 }
@@ -119,15 +121,16 @@ LOCAL void glfw_mouse_moved_callback(GLFWwindow *window, f64 xpos, f64 ypos)
 int main(void)
 {
     if (!reload_libgame()) {
-        return 1;
+        LOG_FATAL("failed to reload libgame\n");
+        exit(EXIT_FAILURE);
     }
-    printf("successfully loaded libgame\n");
+    LOG_INFO("successfully loaded libgame\n");
 
     glfwSetErrorCallback(glfw_error_callback);
 
     if (!glfwInit()) {
-        fprintf(stderr, "error: failed to initialize glfw\n");
-        return 1;
+        LOG_FATAL("failed to initialize glfw\n");
+        exit(EXIT_FAILURE);
     }
 
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
@@ -137,13 +140,13 @@ int main(void)
     glfwWindowHint(GLFW_SAMPLES, 4);
 
     const char *glfw_version = glfwGetVersionString();
-    printf("glfw version: %s\n", glfw_version);
+    LOG_INFO("glfw version: %s\n", glfw_version);
 
     game.window = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "voxland client", NULL, NULL);
     if (!game.window) {
-        fprintf(stderr, "error: failed to create glfw window\n");
+        LOG_FATAL("failed to create glfw window\n");
         glfwTerminate();
-        return 1;
+        exit(EXIT_FAILURE);
     }
 
     glfwMakeContextCurrent(game.window);
@@ -155,10 +158,10 @@ int main(void)
 
     u32 err = glewInit();
     if (err != GLEW_OK) {
-        fprintf(stderr, "error: failed to initialize glew: %s\n", glewGetErrorString(err));
+        LOG_FATAL("failed to initialize glew: %s\n", glewGetErrorString(err));
         glfwDestroyWindow(game.window);
         glfwTerminate();
-        return 1;
+        exit(EXIT_FAILURE);
     }
 
     {
@@ -166,11 +169,11 @@ int main(void)
         const unsigned char *gl_renderer = glGetString(GL_RENDERER);
         const unsigned char *gl_version = glGetString(GL_VERSION);
         const unsigned char *glsl_version = glGetString(GL_SHADING_LANGUAGE_VERSION);
-        printf("graphics info:\n");
-        printf("  vendor: %s\n", gl_vendor);
-        printf("  renderer: %s\n", gl_renderer);
-        printf("  opengl version: %s\n", gl_version);
-        printf("  glsl version: %s\n", glsl_version);
+        LOG_INFO("graphics info:\n");
+        LOG_INFO("  - vendor: %s\n", gl_vendor);
+        LOG_INFO("  - renderer: %s\n", gl_renderer);
+        LOG_INFO("  - opengl version: %s\n", gl_version);
+        LOG_INFO("  - glsl version: %s\n", glsl_version);
     }
 
     game_init(&game);
