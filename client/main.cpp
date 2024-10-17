@@ -199,6 +199,50 @@ LOCAL void *handle_networking(void *args)
     return NULL;
 }
 
+LOCAL bool handle_client_validation(i32 client)
+{
+    u64 puzzle_buffer;
+    i64 bytes_read, bytes_sent;
+
+    bytes_read = recv(client, (void *) &puzzle_buffer, sizeof(puzzle_buffer), 0); // TODO: Handle unresponsive server
+    if (bytes_read <= 0) {
+        if (bytes_read == -1) {
+            LOG_ERROR("validation: recv error: %s\n", strerror(errno));
+        } else if (bytes_read == 0) {
+            LOG_ERROR("validation: orderly shutdown\n");
+        }
+        return false;
+    }
+
+    if (bytes_read == sizeof(puzzle_buffer)) {
+        u64 answer = puzzle_buffer ^ 0xDEADBEEFCAFEBABE; // TODO: Come up with a better validation function
+        bytes_sent = send(client, (void *) &answer, sizeof(answer), 0);
+        if (bytes_sent == -1) {
+            LOG_ERROR("validation: send error: %s\n", strerror(errno));
+            return false;
+        } else if (bytes_sent != sizeof(answer)) {
+            LOG_ERROR("validation: failed to send %lu bytes of validation data\n", sizeof(answer));
+            return false;
+        }
+
+        bool status_buffer;
+        bytes_read = recv(client, (void *) &status_buffer, sizeof(status_buffer), 0);
+        if (bytes_read <= 0) {
+            if (bytes_read == -1) {
+                LOG_ERROR("validation status: recv error: %s\n", strerror(errno));
+            } else if (bytes_read == 0) {
+                LOG_ERROR("validation status: orderly shutdown\n");
+            }
+            return false;
+        }
+
+        return status_buffer;
+    }
+
+    LOG_ERROR("validation: received incorrect number of bytes\n");
+    return false;
+}
+
 LOCAL bool connect_to_server(const char *ip_addr, const char *port)
 {
     struct addrinfo hints = {}, *result = NULL, *rp = NULL;
@@ -231,6 +275,14 @@ LOCAL bool connect_to_server(const char *ip_addr, const char *port)
     if (rp == NULL) {
         return false;
     }
+
+    if (!handle_client_validation(client_socket)) {
+        LOG_FATAL("failed client validation\n");
+        close(client_socket);
+        return false;
+    }
+
+    LOG_INFO("client successfully validated\n");
 
     pfds[0].fd = client_socket;
     pfds[0].events = POLLIN;

@@ -13,6 +13,7 @@
 #include <sqlite3.h>
 
 #include "log.h"
+#include "clock.h"
 #include "asserts.h"
 #include "defines.h"
 #include "hexdump.h"
@@ -42,6 +43,53 @@ void signal_handler(i32 sig)
     running = false;
 }
 
+bool validate_incoming_client(i32 client_socket)
+{
+    u64 puzzle_value = clock_get_absolute_time_ns();
+
+    i64 bytes_read, bytes_sent;
+
+    bytes_sent = send(client_socket, (void *) &puzzle_value, sizeof(puzzle_value), 0);
+    if (bytes_sent == -1) {
+        LOG_ERROR("validation: send error: %s\n", strerror(errno));
+        return false;
+    } else if (bytes_sent != sizeof(puzzle_value)) {
+        LOG_ERROR("validation: failed to send %lu bytes of validation data\n", sizeof(puzzle_value));
+        return false;
+    }
+
+    // TODO: Come up with a better validation function
+    u64 answer = puzzle_value ^ 0xDEADBEEFCAFEBABE;
+
+    u64 result_buffer;
+    bytes_read = recv(client_socket, (void *) &result_buffer, sizeof(result_buffer), 0);
+    if (bytes_read <= 0) {
+        if (bytes_read == -1) {
+            LOG_ERROR("validation: recv error: %s\n", strerror(errno));
+        } else if (bytes_read == 0) {
+            LOG_ERROR("validation: orderly shutdown\n");
+        }
+        return false;
+    }
+
+    if (bytes_read == sizeof(result_buffer)) {
+        bool status_buffer = result_buffer == answer;
+        bytes_sent = send(client_socket, (void *) &status_buffer, sizeof(status_buffer), 0);
+        if (bytes_sent == -1) {
+            LOG_ERROR("validation status: send error: %s\n", strerror(errno));
+            return false;
+        } else if (bytes_sent != sizeof(status_buffer)) {
+            LOG_ERROR("validation status: failed to send %lu bytes of validation data\n", sizeof(puzzle_value));
+            return false;
+        }
+
+        return status_buffer;
+    }
+
+    LOG_ERROR("validation: received incorrect number of bytes\n");
+    return false;
+}
+
 void handle_new_connection_request_event(void)
 {
     struct sockaddr_storage client_addr;
@@ -64,6 +112,14 @@ void handle_new_connection_request_event(void)
                ((struct sockaddr_in6 *)&client_addr)->sin6_port;
 
     LOG_INFO("new connection from %s:%hu\n", client_ip, port);
+
+    if (!validate_incoming_client(client_socket)) {
+        LOG_ERROR("%s:%hu failed validation\n", client_ip, port);
+        close(client_socket);
+        return;
+    }
+
+    LOG_INFO("%s:%hu passed validation\n", client_ip, port);
 
     pollfd_set_add(&server_pfds, client_socket);
 }
