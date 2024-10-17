@@ -2,7 +2,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
-#include <assert.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -14,6 +13,7 @@
 #include <sqlite3.h>
 
 #include "log.h"
+#include "asserts.h"
 #include "defines.h"
 #include "hexdump.h"
 #include "pollfd_set.h"
@@ -91,7 +91,7 @@ void handle_client_event(i32 client_socket)
 
 LOCAL bool db_execute_sql(sqlite3 *db, const char *const sql)
 {
-    assert(db != NULL);
+    ASSERT(db != NULL);
 
     char *err = NULL;
     i32 rc = sqlite3_exec(db, sql, 0, 0, &err);
@@ -106,7 +106,7 @@ LOCAL bool db_execute_sql(sqlite3 *db, const char *const sql)
 
 LOCAL bool db_table_exists(sqlite3 *db, const char *table_name)
 {
-    assert(db != NULL);
+    ASSERT(db != NULL);
 
     char sql[256] = {0};
     snprintf(sql, sizeof(sql), "SELECT name FROM sqlite_master WHERE type='table' AND name='%s';", table_name);
@@ -126,7 +126,7 @@ LOCAL bool db_table_exists(sqlite3 *db, const char *table_name)
 
 LOCAL bool db_verify_tables(sqlite3 *db, const char *database_filepath)
 {
-    assert(db != NULL);
+    ASSERT(db != NULL);
 
     LOG_INFO("verifying `%s` database tables\n", database_filepath);
 
@@ -154,7 +154,7 @@ LOCAL bool db_verify_tables(sqlite3 *db, const char *database_filepath)
 
 LOCAL bool db_print_query_result(FILE *stream, sqlite3 *db, const char *const sql)
 {
-    assert(db != NULL);
+    ASSERT(db != NULL);
 
     sqlite3_stmt *stmt;
     i32 rc;
@@ -217,7 +217,7 @@ LOCAL bool db_print_query_result(FILE *stream, sqlite3 *db, const char *const sq
 
 LOCAL char *shift(int *argc, char ***argv)
 {
-    assert(*argc > 0);
+    ASSERT(*argc > 0);
     char *result = **argv;
     *argc -= 1;
     *argv += 1;
