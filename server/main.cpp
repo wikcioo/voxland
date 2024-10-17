@@ -43,6 +43,26 @@ void signal_handler(i32 sig)
     running = false;
 }
 
+bool check_ip_allowed(const char *ip_addr)
+{
+    ASSERT_MSG(server_db != NULL, "sqlite3 handle not initialized");
+
+    char sql[256] = {0};
+    snprintf(sql, 256, "SELECT * FROM ip_blacklist WHERE ip_address = '%s';", ip_addr);
+
+    sqlite3_stmt *stmt;
+    i32 rc = sqlite3_prepare_v2(server_db, sql, -1, &stmt, NULL);
+    if (rc != SQLITE_OK) {
+        LOG_ERROR("failed to prepare statement: %s\n", sqlite3_errmsg(server_db));
+        return false;
+    }
+
+    rc = sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+
+    return rc != SQLITE_ROW;
+}
+
 bool validate_incoming_client(i32 client_socket)
 {
     u64 puzzle_value = clock_get_absolute_time_ns();
@@ -86,7 +106,7 @@ bool validate_incoming_client(i32 client_socket)
         return status_buffer;
     }
 
-    LOG_ERROR("validation: received incorrect number of bytes\n");
+    LOG_WARN("validation: received incorrect number of bytes\n");
     return false;
 }
 
@@ -113,8 +133,16 @@ void handle_new_connection_request_event(void)
 
     LOG_INFO("new connection from %s:%hu\n", client_ip, port);
 
+    if (!check_ip_allowed(client_ip)) {
+        LOG_WARN("rejected connection from %s because the ip address is blacklisted\n", client_ip);
+        close(client_socket);
+        return;
+    }
+
+    LOG_INFO("ip address %s is allowed\n", client_ip);
+
     if (!validate_incoming_client(client_socket)) {
-        LOG_ERROR("%s:%hu failed validation\n", client_ip, port);
+        LOG_WARN("%s:%hu failed validation\n", client_ip, port);
         close(client_socket);
         return;
     }
