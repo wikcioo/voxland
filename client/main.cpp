@@ -79,7 +79,21 @@ LOCAL void ping_server(void)
     };
 
     if (!packet_send(client_socket, PACKET_TYPE_PING, &ping_packet)) {
-        LOG_ERROR("failed to send ping packet");
+        LOG_ERROR("failed to send ping packet\n");
+    }
+}
+
+LOCAL void send_text_message_to_server(const char *message)
+{
+    ASSERT(client_socket > 2);
+
+    packet_txt_msg_t packet = {
+        .length = (u32) strlen(message),
+        .message = (char *) message
+    };
+
+    if (!packet_send(client_socket, PACKET_TYPE_TXT_MSG, &packet)) {
+        LOG_ERROR("failed to send text message packet\n");
     }
 }
 
@@ -119,6 +133,8 @@ LOCAL void glfw_key_callback(GLFWwindow *window, i32 key, i32 scancode, i32 acti
             }
             LOG_INFO("successfully reloaded libgame\n");
         }
+    } else if (key == GLFW_KEY_M && action == GLFW_PRESS) {
+        send_text_message_to_server("hello server!");
     }
 }
 

@@ -164,6 +164,11 @@ LOCAL void process_network_packet(i32 client_socket, u32 type, void *data)
             LOG_TRACE("received ping packet\n");
             packet_send(client_socket, PACKET_TYPE_PING, (packet_ping_t *) data);
         } break;
+        case PACKET_TYPE_TXT_MSG: {
+            packet_txt_msg_t packet;
+            deserialize_packet_txt_msg(data, &packet);
+            LOG_TRACE("received text message of length %lu: %s\n", packet.length, packet.message);
+        } break;
         default: {
             LOG_ERROR("unknown packet type value `%u`\n", type);
         }
