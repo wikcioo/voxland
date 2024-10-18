@@ -59,7 +59,7 @@ common:
 
 # Client targets
 $(BUILD_DIR)/client/client: $(CLIENT_OBJECTS) $(COMMON_OBJECTS)
-	$(CXX) $^ $(CXXFLAGS) $(CLIENT_LIBS) -o $@
+	$(CXX) $^ $(CXXFLAGS) $(CLIENT_LIBS) -Wl,-rpath,$(BUILD_DIR)/client/lib -o $@
 
 $(BUILD_DIR)/client/%.cpp.o: client/%.cpp
 	$(CXX) -c $< $(CLIENT_INCS) $(CXXFLAGS) -o $@
