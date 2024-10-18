@@ -50,3 +50,13 @@ void report_assertion_failure(const char *expression, const char *message, const
     fprintf(stderr, "%s", formatted);
 #endif
 }
+
+void report_expect_failure(const char *message, ...)
+{
+    va_list args;
+    va_start(args, message);
+    fprintf(stderr, ERROR_COLOR "failed: ");
+    vfprintf(stderr, message, args);
+    fprintf(stderr, RESET_COLOR);
+    va_end(args);
+}
