@@ -3,7 +3,8 @@ ifndef config
 endif
 
 CXXFLAGS := -Wall -Wextra -Werror -Wshadow -Wswitch-enum -Wconversion -pedantic \
-			-fstack-protector -fsanitize=undefined
+			-fstack-protector -fsanitize=undefined \
+			-std=c++20
 
 ifeq ($(config), debug)
     CXXFLAGS += -DDEBUG -g -O0

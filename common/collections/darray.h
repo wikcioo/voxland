@@ -55,7 +55,7 @@ void _darray_field_set(void *array, u64 field, u64 value);
 
 #define darray_push_at(array, index, element)                                                                              \
     {                                                                                                                      \
-        typeof(element) tmp = element;                                                                                     \
+        auto tmp = element;                                                                                                \
         array = static_cast<decltype(array)>(_darray_push_at(static_cast<void*>(array), index, static_cast<void*>(&tmp))); \
     }
 

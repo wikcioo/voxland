@@ -18,7 +18,8 @@ CXXFLAGS := -Wall -Wextra -Werror -Wshadow -Wswitch-enum -Wconversion -pedantic 
 			-fstack-protector -fsanitize=undefined \
 			-DDEBUG -DENABLE_ASSERTIONS -g \
 			-I../common -I. \
-			-DENABLE_LOGGING=0
+			-DENABLE_LOGGING=0 \
+			-std=c++20
 
 all:
 	@echo "Building test suite..."
