@@ -28,6 +28,7 @@ SERVER_SOURCES := $(wildcard server/*.cpp)
 SERVER_OBJECTS := $(addprefix $(BUILD_DIR)/server/, $(addsuffix .cpp.o, $(basename $(notdir $(SERVER_SOURCES)))))
 
 COMMON_SOURCES := $(wildcard common/*.cpp)
+COMMON_SOURCES += $(wildcard common/memory/*.cpp)
 COMMON_SOURCES += $(wildcard common/collections/*.cpp)
 COMMON_OBJECTS := $(addprefix $(BUILD_DIR)/common/, $(addsuffix .cpp.o, $(basename $(notdir $(COMMON_SOURCES)))))
 
@@ -75,6 +76,9 @@ $(BUILD_DIR)/server/%.cpp.o: server/%.cpp
 # Common targets
 $(BUILD_DIR)/common/%.cpp.o: common/%.cpp
 	$(CXX) -c -fPIC $< $(CXXFLAGS) -o $@
+
+$(BUILD_DIR)/common/%.cpp.o: common/memory/%.cpp
+	$(CXX) -c -fPIC $< $(CXXFLAGS) -Icommon -o $@
 
 $(BUILD_DIR)/common/%.cpp.o: common/collections/%.cpp
 	$(CXX) -c -fPIC $< $(CXXFLAGS) -Icommon -o $@
