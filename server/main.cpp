@@ -18,9 +18,11 @@
 #include "defines.h"
 #include "hexdump.h"
 #include "pollfd_set.h"
+#include "packet.h"
 
 #define SERVER_BACKLOG 10
 #define INPUT_BUFFER_SIZE 1024
+#define INPUT_OVERFLOW_BUFFER_SIZE 1024
 #define DEFAULT_DATABASE_FILEPATH "db"
 
 LOCAL bool running;
@@ -152,10 +154,26 @@ void handle_new_connection_request_event(void)
     pollfd_set_add(&server_pfds, client_socket);
 }
 
+LOCAL void process_network_packet(i32 client_socket, u32 type, void *data)
+{
+    switch (type) {
+        case PACKET_TYPE_NONE: {
+            LOG_WARN("ignoring received packet of type PACKET_TYPE_NONE\n");
+        } break;
+        case PACKET_TYPE_PING: {
+            LOG_TRACE("received ping packet\n");
+            packet_send(client_socket, PACKET_TYPE_PING, (packet_ping_t *) data);
+        } break;
+        default: {
+            LOG_ERROR("unknown packet type value `%u`\n", type);
+        }
+    }
+}
+
 void handle_client_event(i32 client_socket)
 {
-    u8 buffer[INPUT_BUFFER_SIZE] = {0};
-    i64 bytes_read = recv(client_socket, buffer, INPUT_BUFFER_SIZE, 0);
+    u8 recv_buffer[INPUT_BUFFER_SIZE + INPUT_OVERFLOW_BUFFER_SIZE] = {0};
+    i64 bytes_read = recv(client_socket, recv_buffer, INPUT_BUFFER_SIZE, 0);
     if (bytes_read <= 0) {
         if (bytes_read == 0) {
             LOG_INFO("client with socketfd = %d performed orderly shutdown\n", client_socket);
@@ -169,8 +187,65 @@ void handle_client_event(i32 client_socket)
 
 #if 0
     LOG_DEBUG("read %lld bytes of data:\n", bytes_read);
-    hexdump(stdout, buffer, bytes_read, HEXDUMP_FLAG_CANONICAL);
+    hexdump(stdout, recv_buffer, bytes_read, HEXDUMP_FLAG_CANONICAL);
 #endif
+
+    PERSIST const u32 header_size = PACKET_TYPE_SIZE[PACKET_TYPE_HEADER];
+
+    ASSERT_MSG(bytes_read >= header_size, "unhandled: read fewer bytes than the header size");
+
+    i64 remaining_bytes_to_parse = bytes_read;
+    u8 *bufptr = recv_buffer;
+
+    // Iterate over all the packets included in single TCP data reception.
+    // Optionally, read more data to complete the payload.
+    for (;;) {
+        packet_header_t *header = (packet_header_t *) bufptr;
+
+        if (header->type >= NUM_OF_PACKET_TYPES) {
+            LOG_ERROR("received unknown header type `%u`\n", header->type);
+            break;
+        }
+
+        // Verify whether all the payload data is present in the receive buffer.
+        // If it’s not, read the remaining bytes from the socket that are needed to complete the payload.
+        if (remaining_bytes_to_parse - header_size < header->payload_size) {
+            i64 missing_bytes = header->payload_size - (remaining_bytes_to_parse - header_size);
+
+            LOG_DEBUG("reading %lu more bytes to complete payload\n", missing_bytes);
+
+            ASSERT_MSG(missing_bytes <= INPUT_OVERFLOW_BUFFER_SIZE, "not enough space in overflow buffer");
+
+            // Read into INPUT_OVERFLOW_BUFFER of the recv_buffer and proceed to packet interpretation.
+            i64 new_bytes_read = recv(client_socket, &recv_buffer[INPUT_BUFFER_SIZE], missing_bytes, 0);
+            UNUSED(new_bytes_read);
+            ASSERT(new_bytes_read == missing_bytes);
+        }
+
+        process_network_packet(client_socket, header->type, bufptr + header_size);
+
+        // Check if there are more bytes to parse.
+        u64 parsed_packet_size = header_size + header->payload_size;
+        bufptr = (bufptr + parsed_packet_size);
+        remaining_bytes_to_parse -= parsed_packet_size;
+        if (remaining_bytes_to_parse > 0) {
+            LOG_DEBUG("remaining_bytes_to_parse = %lu\n", remaining_bytes_to_parse);
+            if (remaining_bytes_to_parse >= header_size) {
+                // Enough unparsed bytes to read the header.
+                packet_header_t *next_header = (packet_header_t *) bufptr;
+                if (next_header->type <= PACKET_TYPE_NONE || next_header->type >= NUM_OF_PACKET_TYPES) {
+                    break;
+                }
+                LOG_DEBUG("next header is valid\n");
+            } else {
+                // Not enough remaining unparsed bytes to read a complete header.
+                ASSERT_MSG(0, "unhandled: fewer bytes than header size");
+            }
+        } else {
+            // No more bytes to parse.
+            break;
+        }
+    }
 }
 
 LOCAL bool db_execute_sql(sqlite3 *db, const char *const sql)

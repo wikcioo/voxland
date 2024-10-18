@@ -280,4 +280,4 @@ void game_shutdown(Game *game)
     glDeleteBuffers(1, &game->vbo);
 }
 
-}
+} // extern "C"

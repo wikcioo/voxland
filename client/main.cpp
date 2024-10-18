@@ -21,9 +21,12 @@
 #include "defines.h"
 #include "game.h"
 #include "hexdump.h"
+#include "packet.h"
+#include "clock.h"
 
 #define POLLFD_COUNT 1
 #define INPUT_BUFFER_SIZE 1024
+#define INPUT_OVERFLOW_BUFFER_SIZE 1024
 #define POLL_INFINITE_TIMEOUT -1
 
 LOCAL Game game = {};
@@ -66,6 +69,20 @@ bool reload_libgame(void)
     return true;
 }
 
+LOCAL void ping_server(void)
+{
+    ASSERT(client_socket > 2);
+
+    u64 time_now = clock_get_absolute_time_ns();
+    packet_ping_t ping_packet = {
+        .time = time_now
+    };
+
+    if (!packet_send(client_socket, PACKET_TYPE_PING, &ping_packet)) {
+        LOG_ERROR("failed to send ping packet");
+    }
+}
+
 LOCAL void glfw_error_callback(i32 code, const char *description)
 {
     UNUSED(code); UNUSED(description);
@@ -87,9 +104,13 @@ LOCAL void glfw_key_callback(GLFWwindow *window, i32 key, i32 scancode, i32 acti
     UNUSED(mods);
 
     if (key == GLFW_KEY_P && action == GLFW_PRESS) {
-        game.is_polygon_mode = !game.is_polygon_mode;
-        i32 mode = game.is_polygon_mode ? GL_LINE : GL_FILL;
-        glPolygonMode(GL_FRONT_AND_BACK, mode);
+        if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) {
+            ping_server();
+        } else {
+            game.is_polygon_mode = !game.is_polygon_mode;
+            i32 mode = game.is_polygon_mode ? GL_LINE : GL_FILL;
+            glPolygonMode(GL_FRONT_AND_BACK, mode);
+        }
     } else if (key == GLFW_KEY_R && action == GLFW_PRESS) {
         if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) {
             if (!reload_libgame()) {
@@ -145,10 +166,28 @@ LOCAL void signal_handler(i32 sig)
     running = false;
 }
 
+LOCAL void process_network_packet(u32 type, void *data)
+{
+    switch (type) {
+        case PACKET_TYPE_NONE: {
+            LOG_WARN("ignoring received packet of type PACKET_TYPE_NONE\n");
+        } break;
+        case PACKET_TYPE_PING: {
+            packet_ping_t *packet = (packet_ping_t *) data;
+            u64 time_now = clock_get_absolute_time_ns();
+            f64 ping_ms = (f64) (time_now - packet->time) / 1000000.0;
+            LOG_TRACE("ping = %fms\n", ping_ms);
+        } break;
+        default: {
+            LOG_ERROR("unknown packet type value `%u`\n", type);
+        }
+    }
+}
+
 LOCAL void handle_incoming_server_data(void)
 {
-    u8 buffer[INPUT_BUFFER_SIZE] = {0};
-    i64 bytes_read = recv(client_socket, buffer, INPUT_BUFFER_SIZE, 0);
+    u8 recv_buffer[INPUT_BUFFER_SIZE + INPUT_OVERFLOW_BUFFER_SIZE] = {0};
+    i64 bytes_read = recv(client_socket, recv_buffer, INPUT_BUFFER_SIZE, 0);
     if (bytes_read <= 0) {
         if (bytes_read == 0) {
             LOG_INFO("orderly shutdown: disconnected from server\n");
@@ -160,10 +199,67 @@ LOCAL void handle_incoming_server_data(void)
         return;
     }
 
-#if 1
+#if 0
     LOG_DEBUG("read %lld bytes of data:\n", bytes_read);
-    hexdump(stdout, buffer, bytes_read, HEXDUMP_FLAG_CANONICAL);
+    hexdump(stdout, recv_buffer, bytes_read, HEXDUMP_FLAG_CANONICAL);
 #endif
+
+    PERSIST const u32 header_size = PACKET_TYPE_SIZE[PACKET_TYPE_HEADER];
+
+    ASSERT_MSG(bytes_read >= header_size, "unhandled: read fewer bytes than header size");
+
+    i64 remaining_bytes_to_parse = bytes_read;
+    u8 *bufptr = recv_buffer;
+
+    // Iterate over all the packets included in single TCP data reception.
+    // Optionally, read more data to complete the payload.
+    for (;;) {
+        packet_header_t *header = (packet_header_t *) bufptr;
+
+        if (header->type >= NUM_OF_PACKET_TYPES) {
+            LOG_ERROR("received unknown header type `%u`\n", header->type);
+            break;
+        }
+
+        // Verify whether all the payload data is present in the receive buffer.
+        // If it’s not, read the remaining bytes from the socket that are needed to complete the payload.
+        if (remaining_bytes_to_parse - header_size < header->payload_size) {
+            i64 missing_bytes = header->payload_size - (remaining_bytes_to_parse - header_size);
+
+            LOG_DEBUG("reading %lu more bytes to complete payload\n", missing_bytes);
+
+            ASSERT_MSG(missing_bytes <= INPUT_OVERFLOW_BUFFER_SIZE, "not enough space in overflow buffer");
+
+            // Read into INPUT_OVERFLOW_BUFFER of the recv_buffer and proceed to packet interpretation.
+            i64 new_bytes_read = recv(client_socket, &recv_buffer[INPUT_BUFFER_SIZE], missing_bytes, 0);
+            UNUSED(new_bytes_read);
+            ASSERT(new_bytes_read == missing_bytes);
+        }
+
+        process_network_packet(header->type, bufptr + header_size);
+
+        // Check if there are more bytes to parse.
+        u64 parsed_packet_size = header_size + header->payload_size;
+        bufptr = (bufptr + parsed_packet_size);
+        remaining_bytes_to_parse -= parsed_packet_size;
+        if (remaining_bytes_to_parse > 0) {
+            LOG_DEBUG("remaining_bytes_to_parse = %lu\n", remaining_bytes_to_parse);
+            if (remaining_bytes_to_parse >= header_size) {
+                // Enough unparsed bytes to read the header.
+                packet_header_t *next_header = (packet_header_t *) bufptr;
+                if (next_header->type <= PACKET_TYPE_NONE || next_header->type >= NUM_OF_PACKET_TYPES) {
+                    break;
+                }
+                LOG_DEBUG("next header is valid\n");
+            } else {
+                // Not enough remaining unparsed bytes to read a complete header.
+                ASSERT_MSG(0, "unhandled: fewer bytes than header size");
+            }
+        } else {
+            // No more bytes to parse.
+            break;
+        }
+    }
 }
 
 LOCAL void *handle_networking(void *args)

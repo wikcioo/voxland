@@ -3,6 +3,7 @@
 #define INLINE static inline
 #define LOCAL static
 #define PERSIST static
+#define PACKED __attribute__((packed))
 
 #define BIT(x)          (1 << (x))
 #define UNUSED(x)       ((void) x)
