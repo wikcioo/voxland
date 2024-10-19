@@ -73,7 +73,7 @@ $(BUILD_DIR)/server/server: $(SERVER_OBJECTS) $(COMMON_OBJECTS)
 	$(CXX) $^ $(CXXFLAGS) $(SERVER_LIBS) -o $@
 
 $(BUILD_DIR)/server/%.cpp.o: server/%.cpp
-	$(CXX) -c $< $(SERVER_INCS) $(CXXFLAGS) -o $@
+	$(CXX) -c $< $(SERVER_INCS) $(CXXFLAGS) -DSERVER -o $@
 
 # Common targets
 $(BUILD_DIR)/common/%.cpp.o: common/%.cpp

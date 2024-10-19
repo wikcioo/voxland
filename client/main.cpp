@@ -16,6 +16,8 @@
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 
+#include <glm/gtc/type_ptr.hpp>
+
 #include "log.h"
 #include "asserts.h"
 #include "defines.h"
@@ -135,14 +137,23 @@ LOCAL void glfw_key_callback(GLFWwindow *window, i32 key, i32 scancode, i32 acti
         }
     } else if (key == GLFW_KEY_M && action == GLFW_PRESS) {
         send_text_message_to_server("hello server!");
+    } else if (key == GLFW_KEY_F1 && action == GLFW_PRESS) {
+        // Intentionally crash the client.
+        i32 a = 1, b = 0;
+        i32 c = a / b;
+        UNUSED(c);
     }
 }
 
 LOCAL void glfw_mouse_moved_callback(GLFWwindow *window, f64 xpos, f64 ypos)
 {
-    UNUSED(window);
-
     PERSIST bool first_mouse_move = true;
+
+    if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) != GLFW_PRESS) {
+        first_mouse_move = true;
+        return;
+    }
+
     PERSIST f32 last_x, last_y;
 
     if (first_mouse_move) {
@@ -193,6 +204,64 @@ LOCAL void process_network_packet(u32 type, void *data)
             u64 time_now = clock_get_absolute_time_ns();
             f64 ping_ms = (f64) (time_now - packet->time) / 1000000.0;
             LOG_TRACE("ping = %fms\n", ping_ms);
+        } break;
+        case PACKET_TYPE_PLAYER_JOIN_RES: {
+            packet_player_join_res_t *packet = (packet_player_join_res_t *) data;
+            if (!packet->approved) {
+                LOG_ERROR("client join request has been rejected by the server\n");
+                // For now just terminate the client.
+                close(client_socket);
+                exit(EXIT_FAILURE);
+                return;
+            }
+
+            game.self->id = packet->id;
+            memcpy(glm::value_ptr(game.self->color), packet->color, 3 * sizeof(f32));
+            memcpy(glm::value_ptr(game.self->position), packet->position, 3 * sizeof(f32));
+            LOG_DEBUG("approved by the server with id=%u color=(%f,%f,%f)\n", packet->id, packet->color[0], packet->color[1], packet->color[2]);
+        } break;
+        case PACKET_TYPE_PLAYER_ADD: {
+            packet_player_add_t *packet = (packet_player_add_t *) data;
+
+            player_t *player;
+            HASH_FIND_INT(game.players, &packet->id, player);
+            if (player != NULL) {
+                LOG_ERROR("player with id=%u already exists\n", packet->id);
+                break;
+            }
+
+            player = (player_t *) malloc(sizeof(*player));
+            memset(player, 0, sizeof(*player));
+            // TODO: move player init to a function
+            player->id = packet->id;
+            memcpy(player->username, packet->username, packet->username_length);
+            player->color = glm::vec3(packet->color[0], packet->color[1], packet->color[2]);
+            player->position = glm::vec3(packet->position[0], packet->position[1], packet->position[2]);
+            HASH_ADD_INT(game.players, id, player);
+            LOG_DEBUG("added player: username='%s' id=%u position=(%f,%f,%f)\n", player->username, player->id, player->position.x, player->position.y, player->position.z);
+        } break;
+        case PACKET_TYPE_PLAYER_REMOVE: {
+            packet_player_remove_t *packet = (packet_player_remove_t *) data;
+            player_t *player;
+            HASH_FIND_INT(game.players, &packet->id, player);
+            if (player == NULL) {
+                LOG_ERROR("failed to find player with id=%u to remove\n", packet->id);
+                break;
+            }
+            LOG_DEBUG("removed player: username='%s' id=%u\n", player->username, player->id);
+            HASH_DEL(game.players, player);
+            free(player); // NOTE: maybe we want to keep the data for further use
+        } break;
+        case PACKET_TYPE_PLAYER_MOVE: {
+            packet_player_move_t *packet = (packet_player_move_t *) data;
+            player_t *player;
+            HASH_FIND_INT(game.players, &packet->id, player);
+            if (player == NULL) {
+                LOG_ERROR("failed to find player with id=%u to move\n", packet->id);
+                break;
+            }
+
+            memcpy(glm::value_ptr(player->position), packet->position, 3 * sizeof(f32));
         } break;
         default: {
             LOG_ERROR("unknown packet type value `%u`\n", type);
@@ -421,7 +490,7 @@ LOCAL char *shift(int *argc, char ***argv)
 
 LOCAL void usage(FILE *stream, const char *const program)
 {
-    fprintf(stream, "usage: %s -ip <server ip address> -p <port> [-h]\n", program);
+    fprintf(stream, "usage: %s -ip <server ip address> -p <port> --username <username> --password <password> [-h]\n", program);
 }
 
 int main(int argc, char **argv)
@@ -429,6 +498,8 @@ int main(int argc, char **argv)
     const char *const program = shift(&argc, &argv);
     const char *server_ip_address = NULL;
     const char *server_port = NULL;
+    const char *username = NULL;
+    const char *password = NULL;
 
     while (argc > 0) {
         const char *flag = shift(&argc, &argv);
@@ -449,6 +520,22 @@ int main(int argc, char **argv)
             }
 
             server_port = shift(&argc, &argv);
+        } else if (strcmp(flag, "--username") == 0) {
+            if (argc == 0) {
+                LOG_FATAL("missing argument for flag `%s`\n", flag);
+                usage(stderr, program);
+                exit(EXIT_FAILURE);
+            }
+
+            username = shift(&argc, &argv);
+        } else if (strcmp(flag, "--password") == 0) {
+            if (argc == 0) {
+                LOG_FATAL("missing argument for flag `%s`\n", flag);
+                usage(stderr, program);
+                exit(EXIT_FAILURE);
+            }
+
+            password = shift(&argc, &argv);
         } else if (strcmp(flag, "-h") == 0) {
             usage(stdout, program);
             exit(EXIT_SUCCESS);
@@ -468,6 +555,24 @@ int main(int argc, char **argv)
     if (server_port == NULL) {
         LOG_FATAL("server port argument missing\n");
         usage(stderr, program);
+        exit(EXIT_FAILURE);
+    }
+
+    if (username == NULL) {
+        LOG_FATAL("username argument missing\n");
+        usage(stderr, program);
+        exit(EXIT_FAILURE);
+    } else if (strlen(username) > PLAYER_USERNAME_MAX_LEN) {
+        LOG_FATAL("username too long\n");
+        exit(EXIT_FAILURE);
+    }
+
+    if (password == NULL) {
+        LOG_FATAL("password argument missing\n");
+        usage(stderr, program);
+        exit(EXIT_FAILURE);
+    } else if (strlen(password) > PLAYER_PASSWORD_MAX_LEN) {
+        LOG_FATAL("password too long\n");
         exit(EXIT_FAILURE);
     }
 
@@ -493,7 +598,9 @@ int main(int argc, char **argv)
     const char *glfw_version = glfwGetVersionString(); UNUSED(glfw_version);
     LOG_INFO("glfw version: %s\n", glfw_version);
 
-    game.window = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "voxland client", NULL, NULL);
+    char window_title[256] = {0};
+    snprintf(window_title, 256, "voxland client - username: %s", username);
+    game.window = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, window_title, NULL, NULL);
     if (!game.window) {
         LOG_FATAL("failed to create glfw window\n");
         glfwTerminate();
@@ -504,8 +611,6 @@ int main(int argc, char **argv)
     glfwSetFramebufferSizeCallback(game.window, glfw_framebuffer_size_callback);
     glfwSetKeyCallback(game.window, glfw_key_callback);
     glfwSetCursorPosCallback(game.window, glfw_mouse_moved_callback);
-
-    glfwSetInputMode(game.window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
     u32 err = glewInit();
     if (err != GLEW_OK) {
@@ -536,7 +641,22 @@ int main(int argc, char **argv)
         exit(EXIT_FAILURE);
     }
 
+    game.self = (player_t *) malloc(sizeof(player_t));
+    memset(game.self, 0, sizeof(player_t));
+    game.client_socket = client_socket;
     game_init(&game);
+
+    // Request to join
+    packet_player_join_req_t join_req = {};
+    join_req.username_length = (u8) strlen(username);
+    memcpy(join_req.username, username, join_req.username_length);
+    join_req.password_length = (u8) strlen(password);
+    memcpy(join_req.password, password, join_req.password_length);
+
+    if (!packet_send(client_socket, PACKET_TYPE_PLAYER_JOIN_REQ, &join_req)) {
+        LOG_FATAL("failed to send player join request packet\n");
+        exit(EXIT_FAILURE);
+    }
 
     while (!glfwWindowShouldClose(game.window) && running) {
         f32 now = (f32) glfwGetTime();
@@ -548,11 +668,31 @@ int main(int argc, char **argv)
 
     game_shutdown(&game);
 
+    packet_player_remove_t player_remove_packet = { .id = game.self->id };
+    if (!packet_send(client_socket, PACKET_TYPE_PLAYER_REMOVE, &player_remove_packet)) {
+        LOG_ERROR("failed to send player remove packet\n");
+    }
+
+    free(game.self);
+
+    {
+        // uthash cleanup
+        player_t *p, *tmp1;
+        HASH_ITER(hh, game.players, p, tmp1) {
+            HASH_DEL(game.players, p);
+            free(p);
+        }
+    }
+
     glfwDestroyWindow(game.window);
     glfwTerminate();
 
     pthread_kill(network_thread, SIGINT);
     pthread_join(network_thread, NULL);
+
+    if (dlclose(libgame) != 0) {
+        LOG_ERROR("error closing shared object: %s\n", dlerror());
+    }
 
     return EXIT_SUCCESS;
 }

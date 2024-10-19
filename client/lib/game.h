@@ -5,6 +5,7 @@
 #include <glm/glm.hpp>
 
 #include "defines.h"
+#include "player_types.h"
 
 #define WINDOW_WIDTH 1280
 #define WINDOW_HEIGHT 720
@@ -27,6 +28,9 @@ typedef struct {
     u32 vao, vbo;
     u32 flat_color_shader;
     u32 lighting_shader;
+    player_t *players; // uthash
+    player_t *self;
+    i32 client_socket;
 } Game;
 
 typedef void (*pfn_game_init)(Game *game);

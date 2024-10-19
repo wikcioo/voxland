@@ -9,6 +9,7 @@
 #include <glm/gtc/type_ptr.hpp>
 
 #include "log.h"
+#include "packet.h"
 
 const char *vertex_shader_source =
     "#version 330 core\n"
@@ -125,6 +126,32 @@ void process_input(Game *game)
     } else if (glfwGetKey(game->window, GLFW_KEY_D) == GLFW_PRESS) {
         game->camera_position += camera_right * speed;
     }
+
+    bool moved = false;
+    if (glfwGetKey(game->window, GLFW_KEY_UP) == GLFW_PRESS) {
+        game->self->position.z -= speed;
+        moved = true;
+    } else if (glfwGetKey(game->window, GLFW_KEY_DOWN) == GLFW_PRESS) {
+        game->self->position.z += speed;
+        moved = true;
+    } else if (glfwGetKey(game->window, GLFW_KEY_LEFT) == GLFW_PRESS) {
+        game->self->position.x -= speed;
+        moved = true;
+    } else if (glfwGetKey(game->window, GLFW_KEY_RIGHT) == GLFW_PRESS) {
+        game->self->position.x += speed;
+        moved = true;
+    }
+
+    // TODO: Aggregate player movement and send to server at regular intervals
+    if (moved) {
+        packet_player_move_t packet = {};
+        packet.id = game->self->id;
+        memcpy(packet.position, glm::value_ptr(game->self->position), 3 * sizeof(f32));
+
+        if (!packet_send(game->client_socket, PACKET_TYPE_PLAYER_MOVE, &packet)) {
+            LOG_ERROR("failed to send player move packet\n");
+        }
+    }
 }
 
 // This module is hot-reloadable using dlopen
@@ -231,35 +258,41 @@ void game_update(Game *game)
     f32 now = (f32) glfwGetTime();
     glm::vec3 light_position = glm::vec3(glm::cos(now * light_speed) * radius, 3.0f, glm::sin(now * light_speed) * radius);
 
-    {
-        // render cube
-        glUseProgram(game->lighting_shader);
+    glUseProgram(game->lighting_shader);
+    glUniformMatrix4fv(glGetUniformLocation(game->lighting_shader, "projection"), 1, false, glm::value_ptr(projection));
+    glUniformMatrix4fv(glGetUniformLocation(game->lighting_shader, "view"), 1, false, glm::value_ptr(view));
+    glUniform3fv(glGetUniformLocation(game->lighting_shader, "camera_pos"), 1, glm::value_ptr(game->camera_position));
+    glUniform3fv(glGetUniformLocation(game->lighting_shader, "light.position"), 1, glm::value_ptr(light_position));
+    glUniform3f(glGetUniformLocation(game->lighting_shader, "light.ambient"), 0.2f, 0.2f, 0.2f);
+    glUniform3f(glGetUniformLocation(game->lighting_shader, "light.diffuse"), 0.5f, 0.5f, 0.5f);
+    glUniform3f(glGetUniformLocation(game->lighting_shader, "light.specular"), 1.0f, 1.0f, 1.0f);
+    glUniform3f(glGetUniformLocation(game->lighting_shader, "mat.specular"), 0.5f, 0.5f, 0.5f);
+    glUniform1f(glGetUniformLocation(game->lighting_shader, "mat.shininess"), 32.0f);
+    glBindVertexArray(game->vao);
 
-        glm::mat4 model = glm::mat4(1.0f);
-
-        glUniformMatrix4fv(glGetUniformLocation(game->lighting_shader, "projection"), 1, false, glm::value_ptr(projection));
-        glUniformMatrix4fv(glGetUniformLocation(game->lighting_shader, "view"), 1, false, glm::value_ptr(view));
+    // Render players
+    for (player_t *player = game->players; player != NULL; player = (player_t *) player->hh.next) {
+        glm::mat4 model = glm::translate(glm::mat4(1.0f), player->position);
         glUniformMatrix4fv(glGetUniformLocation(game->lighting_shader, "model"), 1, false, glm::value_ptr(model));
-        glUniform3fv(glGetUniformLocation(game->lighting_shader, "camera_pos"), 1, glm::value_ptr(game->camera_position));
-        glUniform3f(glGetUniformLocation(game->lighting_shader, "mat.ambient"), 1.0f, 0.5f, 0.31f);
-        glUniform3f(glGetUniformLocation(game->lighting_shader, "mat.diffuse"), 1.0f, 0.5f, 0.31f);
-        glUniform3f(glGetUniformLocation(game->lighting_shader, "mat.specular"), 0.5f, 0.5f, 0.5f);
-        glUniform1f(glGetUniformLocation(game->lighting_shader, "mat.shininess"), 32.0f);
-        glUniform3fv(glGetUniformLocation(game->lighting_shader, "light.position"), 1, glm::value_ptr(light_position));
-        glUniform3f(glGetUniformLocation(game->lighting_shader, "light.ambient"), 0.2f, 0.2f, 0.2f);
-        glUniform3f(glGetUniformLocation(game->lighting_shader, "light.diffuse"), 0.5f, 0.5f, 0.5f);
-        glUniform3f(glGetUniformLocation(game->lighting_shader, "light.specular"), 1.0f, 1.0f, 1.0f);
-
-        glBindVertexArray(game->vao);
+        glUniform3fv(glGetUniformLocation(game->lighting_shader, "mat.ambient"), 1, glm::value_ptr(player->color));
+        glUniform3fv(glGetUniformLocation(game->lighting_shader, "mat.diffuse"), 1, glm::value_ptr(player->color));
         glDrawArrays(GL_TRIANGLES, 0, 36);
     }
 
     {
-        // render light
+        // Render ourselves
+        glm::mat4 model = glm::translate(glm::mat4(1.0f), game->self->position);
+        glUniformMatrix4fv(glGetUniformLocation(game->lighting_shader, "model"), 1, false, glm::value_ptr(model));
+        glUniform3fv(glGetUniformLocation(game->lighting_shader, "mat.ambient"), 1, glm::value_ptr(game->self->color));
+        glUniform3fv(glGetUniformLocation(game->lighting_shader, "mat.diffuse"), 1, glm::value_ptr(game->self->color));
+        glDrawArrays(GL_TRIANGLES, 0, 36);
+    }
+
+    {
+        // Render light
         glUseProgram(game->flat_color_shader);
 
         glm::mat4 light_model = glm::translate(glm::mat4(1.0f), light_position) * glm::scale(glm::mat4(1.0f), glm::vec3(0.25f));
-
         glUniformMatrix4fv(glGetUniformLocation(game->flat_color_shader, "projection"), 1, false, glm::value_ptr(projection));
         glUniformMatrix4fv(glGetUniformLocation(game->flat_color_shader, "view"), 1, false, glm::value_ptr(view));
         glUniformMatrix4fv(glGetUniformLocation(game->flat_color_shader, "model"), 1, false, glm::value_ptr(light_model));

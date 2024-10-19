@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <time.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -12,6 +13,8 @@
 #include <signal.h>
 #include <sqlite3.h>
 
+#include <glm/gtc/type_ptr.hpp>
+
 #include "log.h"
 #include "clock.h"
 #include "asserts.h"
@@ -19,16 +22,27 @@
 #include "hexdump.h"
 #include "pollfd_set.h"
 #include "packet.h"
+#include "player_types.h"
+#include "uthash/uthash.h"
 
 #define SERVER_BACKLOG 10
 #define INPUT_BUFFER_SIZE 1024
 #define INPUT_OVERFLOW_BUFFER_SIZE 1024
 #define DEFAULT_DATABASE_FILEPATH "db"
 
+typedef struct {
+    i32 socket;
+    player_id id;
+    UT_hash_handle hh;
+} socket_player_id_pair_t;
+
 LOCAL bool running;
 LOCAL i32 server_socket;
 LOCAL pollfd_set_t server_pfds;
 LOCAL sqlite3 *server_db = NULL;
+LOCAL player_t *players = NULL; // uthash
+LOCAL socket_player_id_pair_t *socket_to_player_id_map = NULL; // uthash
+LOCAL player_id player_next_id = 1000;
 
 void *get_in_addr(struct sockaddr *addr)
 {
@@ -63,6 +77,39 @@ bool check_ip_allowed(const char *ip_addr)
     sqlite3_finalize(stmt);
 
     return rc != SQLITE_ROW;
+}
+
+bool player_authenticate(const char *username, const char *password)
+{
+    ASSERT_MSG(server_db != NULL, "sqlite3 handle not initialized");
+
+    char sql[256] = {0};
+    snprintf(sql, 256, "SELECT * FROM users WHERE username = '%s' AND password = '%s';", username, password);
+
+    sqlite3_stmt *stmt;
+    i32 rc = sqlite3_prepare_v2(server_db, sql, -1, &stmt, NULL);
+    if (rc != SQLITE_OK) {
+        LOG_ERROR("failed to prepare statement: %s\n", sqlite3_errmsg(server_db));
+        return false;
+    }
+
+    rc = sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+
+    return rc == SQLITE_ROW;
+}
+
+bool is_player_already_connected(const char *username, u8 length)
+{
+    // TODO: Optimize
+    // Not ideal to iterate through all players and compare strings.
+    for (player_t *player = players; player != NULL; player = (player_t *) player->hh.next) {
+        if (strncmp(username, player->username, length) == 0) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 bool validate_incoming_client(i32 client_socket)
@@ -154,6 +201,115 @@ void handle_new_connection_request_event(void)
     pollfd_set_add(&server_pfds, client_socket);
 }
 
+LOCAL glm::vec3 get_random_color(void)
+{
+    PERSIST bool seeded = false;
+    if (!seeded) {
+        srand((u32) time(NULL));
+        seeded = true;
+    }
+
+    f32 r = (f32) rand() / (f32) RAND_MAX;
+    f32 g = (f32) rand() / (f32) RAND_MAX;
+    f32 b = (f32) rand() / (f32) RAND_MAX;
+
+    return glm::vec3(r, g, b);
+}
+
+LOCAL void handle_player_join_request(i32 client_socket, packet_player_join_req_t *packet)
+{
+    ASSERT(packet->username_length <= PLAYER_USERNAME_MAX_LEN && packet->password_length <= PLAYER_PASSWORD_MAX_LEN);
+
+    char username[PLAYER_USERNAME_MAX_LEN + 1] = {};
+    char password[PLAYER_PASSWORD_MAX_LEN + 1] = {};
+    memcpy(username, packet->username, packet->username_length);
+    memcpy(password, packet->password, packet->password_length);
+
+    packet_player_join_res_t response = {};
+    if (!player_authenticate(username, password)) {
+        LOG_WARN("player authentication failed for `%s`\n", username);
+        response.approved = false;
+        if (!packet_send(client_socket, PACKET_TYPE_PLAYER_JOIN_RES, &response)) {
+            LOG_ERROR("failed to send player join response packet\n");
+        }
+        return;
+    }
+
+    if (is_player_already_connected(username, packet->username_length)) {
+        LOG_WARN("player `%s` already connected\n", username);
+        response.approved = false;
+        if (!packet_send(client_socket, PACKET_TYPE_PLAYER_JOIN_RES, &response)) {
+            LOG_ERROR("failed to send player join response packet\n");
+        }
+        return;
+    }
+
+    LOG_INFO("player authentication succeeded for `%s`\n", username);
+
+    glm::vec3 color = get_random_color();
+    glm::vec3 position = glm::vec3(0.0f);
+
+    player_t *new_player = (player_t *) malloc(sizeof(player_t));
+    new_player->socket = client_socket;
+    new_player->id = player_next_id++;
+    memcpy(new_player->username, packet->username, packet->username_length);
+    new_player->color = color;
+    new_player->position = position;
+
+    response.approved = true;
+    response.id = new_player->id;
+    memcpy(response.color, glm::value_ptr(new_player->color), 3 * sizeof(f32));
+    memcpy(response.position, glm::value_ptr(new_player->position), 3 * sizeof(f32));
+
+    if (!packet_send(client_socket, PACKET_TYPE_PLAYER_JOIN_RES, &response)) {
+        LOG_ERROR("failed to send player join response packet\n");
+    }
+
+    {
+        // Send new player to all existing players
+        packet_player_add_t player_add = {};
+        player_add.id = new_player->id;
+        player_add.username_length = packet->username_length;
+        memcpy(player_add.username, new_player->username, player_add.username_length);
+        memcpy(player_add.color, glm::value_ptr(new_player->color), 3 * sizeof(f32));
+        memcpy(player_add.position, glm::value_ptr(new_player->position), 3 * sizeof(f32));
+
+        player_t *player;
+        for (player = players; player != NULL; player = (player_t *) player->hh.next) {
+            if (!packet_send(player->socket, PACKET_TYPE_PLAYER_ADD, &player_add)) {
+                LOG_ERROR("failed to send new player to existing player socket=%d id=%u\n", player->socket, player->id);
+            }
+        }
+    }
+
+    {
+        // Send all existing players to the new player
+        player_t *player;
+        for (player = players; player != NULL; player = (player_t *) player->hh.next) {
+            packet_player_add_t player_add = {};
+            player_add.id = player->id;
+            player_add.username_length = (u8) strlen(player->username);
+            memcpy(player_add.username, player->username, player_add.username_length);
+            memcpy(player_add.color, glm::value_ptr(player->color), 3 * sizeof(f32));
+            memcpy(player_add.position, glm::value_ptr(player->position), 3 * sizeof(f32));
+
+            if (!packet_send(client_socket, PACKET_TYPE_PLAYER_ADD, &player_add)) {
+                LOG_ERROR("failed to send player add packet\n");
+            }
+        }
+    }
+
+    // Add at the end so that the iteration above does not include the new player.
+    HASH_ADD_INT(players, id, new_player);
+
+    // Add mapping of client socket to player id
+    socket_player_id_pair_t *mapping = (socket_player_id_pair_t *) malloc(sizeof(socket_player_id_pair_t));
+    mapping->socket = client_socket;
+    mapping->id = new_player->id;
+    HASH_ADD_INT(socket_to_player_id_map, socket, mapping);
+    LOG_DEBUG("added mapping between socket=%d -> player_id=%u\n", mapping->socket, mapping->id);
+}
+
 LOCAL void process_network_packet(i32 client_socket, u32 type, void *data)
 {
     switch (type) {
@@ -169,24 +325,129 @@ LOCAL void process_network_packet(i32 client_socket, u32 type, void *data)
             deserialize_packet_txt_msg(data, &packet);
             LOG_TRACE("received text message of length %lu: %s\n", packet.length, packet.message);
         } break;
+        case PACKET_TYPE_PLAYER_JOIN_REQ: {
+            packet_player_join_req_t *packet = (packet_player_join_req_t *) data;
+            handle_player_join_request(client_socket, packet);
+        } break;
+        case PACKET_TYPE_PLAYER_REMOVE: {
+            packet_player_remove_t *remove = (packet_player_remove_t *) data;
+
+            player_t *player;
+            for (player = players; player != NULL; player = (player_t *) player->hh.next) {
+                // Do not send remove packet to the player who is disconnecting (client_socket)
+                if (player->socket != client_socket) {
+                    if (!packet_send(player->socket, PACKET_TYPE_PLAYER_REMOVE, remove)) {
+                        LOG_ERROR("failed to send player remove packet\n");
+                    }
+                }
+            }
+
+            socket_player_id_pair_t *mapping = NULL;
+            HASH_FIND_INT(socket_to_player_id_map, &client_socket, mapping);
+            ASSERT(mapping != NULL);
+            LOG_DEBUG("removed mapping between socket=%d -> player_id=%u\n", mapping->socket, mapping->id);
+            HASH_DEL(socket_to_player_id_map, mapping);
+            free(mapping);
+
+            player_t *p;
+            HASH_FIND_INT(players, &remove->id, p);
+            if (p) {
+                HASH_DEL(players, p);
+                free(p);
+                LOG_DEBUG("removed player with id=%u from server\n", remove->id);
+            } else {
+                LOG_ERROR("player with id=%u not found\n", remove->id);
+            }
+
+            pollfd_set_remove(&server_pfds, client_socket);
+            close(client_socket);
+        } break;
+        case PACKET_TYPE_PLAYER_MOVE: {
+            packet_player_move_t *packet = (packet_player_move_t *) data;
+
+            // Update locally
+            player_t *player;
+            HASH_FIND_INT(players, &packet->id, player);
+            if (player != NULL) {
+                memcpy(glm::value_ptr(player->position), packet->position, 3 * sizeof(f32));
+            } else {
+                LOG_ERROR("player with id=%u not found\n", packet->id);
+                break;
+            }
+
+            // Send updates to all existing players
+            for (player = players; player != NULL; player = (player_t *) player->hh.next) {
+                // Do not send move packet to the player who is sending the update
+                if (player->socket != client_socket) {
+                    if (!packet_send(player->socket, PACKET_TYPE_PLAYER_MOVE, packet)) {
+                        LOG_ERROR("failed to send player move packet\n");
+                    }
+                }
+            }
+        } break;
         default: {
             LOG_ERROR("unknown packet type value `%u`\n", type);
         }
     }
 }
 
+bool receive_client_data(i32 client_socket, u8 *recv_buffer, u32 buffer_size, i64 *bytes_read)
+{
+    ASSERT(client_socket > 2 && recv_buffer && bytes_read);
+
+    *bytes_read = recv(client_socket, recv_buffer, buffer_size, 0);
+    if (*bytes_read <= 0) {
+        if (*bytes_read == -1) {
+            LOG_ERROR("recv error: %s\n", strerror(errno));
+        } else if (*bytes_read == 0) {
+            LOG_INFO("orderly shutdown of client with socket=%d\n", client_socket);
+
+            // Update other players that the user disconnected if the mapping exists
+            socket_player_id_pair_t *mapping;
+            HASH_FIND_INT(socket_to_player_id_map, &client_socket, mapping);
+
+            if (mapping != NULL) {
+                LOG_DEBUG("removed mapping between socket=%d -> player_id=%u\n", mapping->socket, mapping->id);
+                packet_player_remove_t remove = { .id = mapping->id };
+
+                player_t *player;
+                for (player = players; player != NULL; player = (player_t *) player->hh.next) {
+                    // Do not send remove packet to the player who is disconnecting (client_socket)
+                    if (player->socket != client_socket) {
+                        if (!packet_send(player->socket, PACKET_TYPE_PLAYER_REMOVE, &remove)) {
+                            LOG_ERROR("failed to send player remove packet\n");
+                        }
+                    }
+                }
+
+                HASH_FIND_INT(players, &mapping->id, player);
+                if (player) {
+                    HASH_DEL(players, player);
+                    free(player);
+                    LOG_DEBUG("removed player with id=%u from server\n", mapping->id);
+                } else {
+                    LOG_ERROR("player with id=%u not found\n", mapping->id);
+                }
+
+                HASH_DEL(socket_to_player_id_map, mapping);
+                free(mapping);
+            }
+
+            pollfd_set_remove(&server_pfds, client_socket);
+            close(client_socket);
+        }
+
+        return false;
+    }
+
+    return true;
+}
+
 void handle_client_event(i32 client_socket)
 {
     u8 recv_buffer[INPUT_BUFFER_SIZE + INPUT_OVERFLOW_BUFFER_SIZE] = {0};
-    i64 bytes_read = recv(client_socket, recv_buffer, INPUT_BUFFER_SIZE, 0);
-    if (bytes_read <= 0) {
-        if (bytes_read == 0) {
-            LOG_INFO("client with socketfd = %d performed orderly shutdown\n", client_socket);
-            pollfd_set_remove(&server_pfds, client_socket);
-            close(client_socket);
-        } else {
-            LOG_ERROR("recv error: %s\n", strerror(errno));
-        }
+    i64 bytes_read;
+    if (!receive_client_data(client_socket, recv_buffer, INPUT_BUFFER_SIZE, &bytes_read)) {
         return;
     }
 
@@ -305,6 +566,24 @@ LOCAL bool db_verify_tables(sqlite3 *db)
 
         LOG_INFO("creating 'ip_blacklist' table...");
         if (!db_execute_sql(db, sql_create_ip_blacklist_table)) {
+            printf(ERROR_COLOR " ERROR" RESET_COLOR "\n");
+            return false;
+        } else {
+            printf(INFO_COLOR " OK" RESET_COLOR "\n");
+        }
+    }
+
+    if (!db_table_exists(db, "users")) {
+        const char *sql_create_users_table =
+            "CREATE TABLE users (\n"
+            "    id INTEGER PRIMARY KEY AUTOINCREMENT,\n"
+            "    username TEXT NOT NULL UNIQUE,\n"
+            "    password TEXT NOT NULL,\n"
+            "    created_at DATETIME DEFAULT (DATETIME('now', 'localtime'))\n"
+            ");";
+
+        LOG_INFO("creating 'users' table...");
+        if (!db_execute_sql(db, sql_create_users_table)) {
             printf(ERROR_COLOR " ERROR" RESET_COLOR "\n");
             return false;
         } else {
@@ -467,6 +746,14 @@ int main(int argc, char **argv)
         exit(EXIT_FAILURE);
     }
 
+    // TEMP: print users found in the database
+    const char *sql_select_users = "SELECT * FROM users;";
+    if (!db_print_query_result(stdout, server_db, sql_select_users)) {
+        LOG_FATAL("failed to execute query `%s`\n", sql_select_users);
+        sqlite3_close(server_db);
+        exit(EXIT_FAILURE);
+    }
+
     char hostname[256] = {0};
     gethostname(hostname, 256);
     LOG_INFO("starting the game server on host `%s`\n", hostname);
@@ -554,7 +841,6 @@ int main(int argc, char **argv)
             if (server_pfds.fds[i].revents & POLLIN) {
                 if (server_pfds.fds[i].fd == server_socket) {
                     handle_new_connection_request_event();
-                    break;
                 } else {
                     handle_client_event(server_pfds.fds[i].fd);
                 }
@@ -567,6 +853,21 @@ int main(int argc, char **argv)
     sqlite3_close(server_db);
 
     pollfd_set_shutdown(&server_pfds);
+
+    {
+        // uthash cleanup
+        player_t *p, *tmp1;
+        HASH_ITER(hh, players, p, tmp1) {
+            HASH_DEL(players, p);
+            free(p);
+        }
+
+        socket_player_id_pair_t *s, *tmp2;
+        HASH_ITER(hh, socket_to_player_id_map, s, tmp2) {
+            HASH_DEL(socket_to_player_id_map, s);
+            free(s);
+        }
+    }
 
     if (close(server_socket) == -1) {
         LOG_ERROR("error while closing the socket: %s\n", strerror(errno));
