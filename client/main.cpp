@@ -18,13 +18,13 @@
 
 #include <glm/gtc/type_ptr.hpp>
 
-#include "log.h"
-#include "asserts.h"
-#include "defines.h"
 #include "game.h"
-#include "hexdump.h"
-#include "packet.h"
-#include "clock.h"
+#include "common/log.h"
+#include "common/asserts.h"
+#include "common/defines.h"
+#include "common/hexdump.h"
+#include "common/packet.h"
+#include "common/clock.h"
 
 #define POLLFD_COUNT 1
 #define INPUT_BUFFER_SIZE 1024

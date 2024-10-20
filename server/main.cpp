@@ -15,14 +15,14 @@
 
 #include <glm/gtc/type_ptr.hpp>
 
-#include "log.h"
-#include "clock.h"
-#include "asserts.h"
-#include "defines.h"
-#include "hexdump.h"
 #include "pollfd_set.h"
-#include "packet.h"
-#include "player_types.h"
+#include "common/log.h"
+#include "common/clock.h"
+#include "common/asserts.h"
+#include "common/defines.h"
+#include "common/hexdump.h"
+#include "common/packet.h"
+#include "common/player_types.h"
 #include "uthash/uthash.h"
 
 #define SERVER_BACKLOG 10

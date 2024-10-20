@@ -2,7 +2,7 @@
 
 #include <poll.h>
 
-#include "defines.h"
+#include "common/defines.h"
 
 #define POLL_INFINITE_TIMEOUT -1
 

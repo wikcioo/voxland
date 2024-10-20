@@ -8,8 +8,8 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-#include "log.h"
-#include "packet.h"
+#include "common/log.h"
+#include "common/packet.h"
 
 const char *vertex_shader_source =
     "#version 330 core\n"

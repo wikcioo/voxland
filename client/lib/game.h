@@ -4,8 +4,8 @@
 
 #include <glm/glm.hpp>
 
-#include "defines.h"
-#include "player_types.h"
+#include "common/defines.h"
+#include "common/player_types.h"
 
 #define WINDOW_WIDTH 1280
 #define WINDOW_HEIGHT 720

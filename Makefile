@@ -15,16 +15,16 @@ endif
 BUILD_DIR := build/$(config)
 
 CLIENT_LIBS    := $(shell pkg-config --libs glfw3 glew)
-CLIENT_INCS    := -Iclient/lib -Icommon -Ithird_party
+CLIENT_INCS    := -Iclient/lib -I. -Ithird_party
 CLIENT_SOURCES := $(wildcard client/*.cpp)
 CLIENT_OBJECTS := $(addprefix $(BUILD_DIR)/client/, $(addsuffix .cpp.o, $(basename $(notdir $(CLIENT_SOURCES)))))
 
-CLIENT_SO_INCS    := -Icommon -Ithird_party
+CLIENT_SO_INCS    := -I. -Ithird_party
 CLIENT_SO_SOURCES := $(wildcard client/lib/*.cpp)
 CLIENT_SO_OBJECTS := $(addprefix $(BUILD_DIR)/client/lib/, $(addprefix lib, $(addsuffix .so, $(basename $(notdir $(CLIENT_SO_SOURCES))))))
 
 SERVER_LIBS    := $(shell pkg-config --libs sqlite3)
-SERVER_INCS    := -Icommon -Ithird_party
+SERVER_INCS    := -I. -Ithird_party
 SERVER_SOURCES := $(wildcard server/*.cpp)
 SERVER_OBJECTS := $(addprefix $(BUILD_DIR)/server/, $(addsuffix .cpp.o, $(basename $(notdir $(SERVER_SOURCES)))))
 
