@@ -110,10 +110,10 @@ u32 create_program(u32 vertex_shader, u32 fragment_shader)
     return program;
 }
 
-void process_input(Game *game)
+void process_input(Game *game, f32 dt)
 {
     PERSIST f32 velocity = 5.0f;
-    f32 speed = game->delta_time * velocity;
+    f32 speed = dt * velocity;
 
     glm::vec3 camera_right = glm::normalize(glm::cross(game->camera_direction, game->camera_up));
 
@@ -127,23 +127,26 @@ void process_input(Game *game)
         game->camera_position += camera_right * speed;
     }
 
-    bool moved = false;
     if (glfwGetKey(game->window, GLFW_KEY_UP) == GLFW_PRESS) {
         game->self->position.z -= speed;
-        moved = true;
+        game->player_moved = true;
     } else if (glfwGetKey(game->window, GLFW_KEY_DOWN) == GLFW_PRESS) {
         game->self->position.z += speed;
-        moved = true;
+        game->player_moved = true;
     } else if (glfwGetKey(game->window, GLFW_KEY_LEFT) == GLFW_PRESS) {
         game->self->position.x -= speed;
-        moved = true;
+        game->player_moved = true;
     } else if (glfwGetKey(game->window, GLFW_KEY_RIGHT) == GLFW_PRESS) {
         game->self->position.x += speed;
-        moved = true;
+        game->player_moved = true;
     }
 
-    // TODO: Aggregate player movement and send to server at regular intervals
-    if (moved) {
+    PERSIST f32 acc_updt = 0.0f;
+    acc_updt += dt;
+    if (acc_updt >= game->client_update_period && game->player_moved) {
+        game->player_moved = false;
+        acc_updt = 0.0f;
+
         packet_player_move_t packet = {};
         packet.id = game->self->id;
         memcpy(packet.position, glm::value_ptr(game->self->position), 3 * sizeof(f32));
@@ -164,8 +167,6 @@ void game_init(Game *game)
     game->current_window_width = WINDOW_WIDTH;
     game->current_window_height = WINDOW_HEIGHT;
     game->is_polygon_mode = false;
-    game->delta_time = 0.0;
-    game->last_time = 0.0;
     game->camera_position = glm::vec3(0.0f, 0.0f, 3.0f);
     game->camera_direction = glm::vec3(0.0f, 0.0f, -1.0f);
     game->camera_up = glm::vec3(0.0f, 1.0f, 0.0f);
@@ -243,12 +244,12 @@ void game_init(Game *game)
     glEnable(GL_DEPTH_TEST);
 }
 
-void game_update(Game *game)
+void game_update(Game *game, f32 dt)
 {
     glClearColor(0.192f, 0.192f, 0.5f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    process_input(game);
+    process_input(game, dt);
 
     glm::mat4 projection = glm::perspective(glm::radians(game->camera_fov), (f32) game->current_window_width / (f32) game->current_window_height, 0.1f, 100.0f);
     glm::mat4 view = glm::lookAt(game->camera_position, game->camera_position + game->camera_direction, game->camera_up);

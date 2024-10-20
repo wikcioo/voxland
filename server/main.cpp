@@ -3,6 +3,7 @@
 #include <string.h>
 #include <errno.h>
 #include <time.h>
+#include <pthread.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -36,12 +37,19 @@ typedef struct {
     UT_hash_handle hh;
 } socket_player_id_pair_t;
 
+typedef struct {
+    player_id id;
+    UT_hash_handle hh;
+} player_moved_t;
+
 LOCAL bool running;
 LOCAL i32 server_socket;
 LOCAL pollfd_set_t server_pfds;
 LOCAL sqlite3 *server_db = NULL;
 LOCAL player_t *players = NULL; // uthash
 LOCAL socket_player_id_pair_t *socket_to_player_id_map = NULL; // uthash
+LOCAL player_moved_t *moved_players = NULL; // uthash
+LOCAL pthread_mutex_t moved_players_lock;
 LOCAL player_id player_next_id = 1000;
 
 void *get_in_addr(struct sockaddr *addr)
@@ -375,15 +383,20 @@ LOCAL void process_network_packet(i32 client_socket, u32 type, void *data)
                 break;
             }
 
-            // Send updates to all existing players
-            for (player = players; player != NULL; player = (player_t *) player->hh.next) {
-                // Do not send move packet to the player who is sending the update
-                if (player->socket != client_socket) {
-                    if (!packet_send(player->socket, PACKET_TYPE_PLAYER_MOVE, packet)) {
-                        LOG_ERROR("failed to send player move packet\n");
-                    }
-                }
+            // Aggregate player moves by saving ids of players that moved within the interval
+            // instead of sending updates right away.
+            player_moved_t *player_moved = NULL;
+            pthread_mutex_lock(&moved_players_lock);
+            HASH_FIND_INT(moved_players, &packet->id, player_moved);
+            if (player_moved == NULL) {
+                // TODO: Replace malloc with scratch buffer, because the elements are short lived
+                // (they need to be valid only until the aggregated moves are broadcasted to players)
+                // and to make the allocation faster, since it's inside a mutex.
+                player_moved = (player_moved_t *) malloc(sizeof(player_moved_t));
+                player_moved->id = packet->id;
+                HASH_ADD_INT(moved_players, id, player_moved);
             }
+            pthread_mutex_unlock(&moved_players_lock);
         } break;
         default: {
             LOG_ERROR("unknown packet type value `%u`\n", type);
@@ -495,14 +508,14 @@ void handle_client_event(i32 client_socket)
         bufptr = (bufptr + parsed_packet_size);
         remaining_bytes_to_parse -= parsed_packet_size;
         if (remaining_bytes_to_parse > 0) {
-            LOG_DEBUG("remaining_bytes_to_parse = %lu\n", remaining_bytes_to_parse);
+            // LOG_DEBUG("remaining_bytes_to_parse = %lu\n", remaining_bytes_to_parse);
             if (remaining_bytes_to_parse >= header_size) {
                 // Enough unparsed bytes to read the header.
                 packet_header_t *next_header = (packet_header_t *) bufptr;
                 if (next_header->type <= PACKET_TYPE_NONE || next_header->type >= NUM_OF_PACKET_TYPES) {
                     break;
                 }
-                LOG_DEBUG("next header is valid\n");
+                // LOG_DEBUG("next header is valid\n");
             } else {
                 // Not enough remaining unparsed bytes to read a complete header.
                 ASSERT_MSG(0, "unhandled: fewer bytes than header size");
@@ -656,6 +669,70 @@ LOCAL bool db_print_query_result(FILE *stream, sqlite3 *db, const char *const sq
 
     sqlite3_finalize(stmt);
     return true;
+}
+
+#define MAX_MOVED_IDS 256
+#define PROCESSING_LOOP_UPS 60
+
+void *processing_loop(void *args)
+{
+    UNUSED(args);
+
+    PERSIST u32 us_to_sleep = (u32) (1.0f / (f32) PROCESSING_LOOP_UPS * 1000 * 1000);
+
+    u32 moved_ids_count = 0;
+    player_id moved_ids[MAX_MOVED_IDS];
+
+    while (running) {
+        // Copy moved player ids for later processing to unlock the mutex quicker.
+        pthread_mutex_lock(&moved_players_lock);
+        for (player_moved_t *pm = moved_players; pm != NULL; pm = (player_moved_t *) pm->hh.next) {
+            ASSERT(moved_ids_count < MAX_MOVED_IDS);
+            moved_ids[moved_ids_count++] = pm->id;
+        }
+
+        if (moved_ids_count > 0) {
+            // Clear the moved players uthash.
+            player_moved_t *pm, *tmp;
+            HASH_ITER(hh, moved_players, pm, tmp) {
+                HASH_DEL(moved_players, pm);
+                free(pm);
+            }
+        }
+
+        pthread_mutex_unlock(&moved_players_lock);
+
+        // NOTE: Perhaps we should also copy players uthash before copying values from it.
+        if (moved_ids_count > 0) {
+            // Prepare batch move packet.
+            packet_player_batch_move_t packet = {};
+            packet.count = moved_ids_count;
+            packet.ids = (player_id *) malloc(packet.count * sizeof(player_id));
+            packet.positions = (f32 *) malloc(packet.count * 3 * sizeof(f32));
+            for (u32 i = 0; i < moved_ids_count; i++) {
+                packet.ids[i] = moved_ids[i];
+                player_t *player = NULL;
+                HASH_FIND_INT(players, &moved_ids[i], player);
+                ASSERT(player != NULL);
+                memcpy(&packet.positions[i * 3], glm::value_ptr(player->position), 3 * sizeof(f32));
+            }
+
+            // Send batch updates to players.
+            for (player_t *player = players; player != NULL; player = (player_t *) player->hh.next) {
+                if (!packet_send(player->socket, PACKET_TYPE_PLAYER_BATCH_MOVE, &packet)) {
+                    LOG_ERROR("failed to send player batch move packet\n");
+                }
+            }
+
+            free(packet.ids);
+            free(packet.positions);
+            moved_ids_count = 0;
+        }
+
+        usleep(us_to_sleep);
+    }
+
+    return NULL;
 }
 
 LOCAL char *shift(int *argc, char ***argv)
@@ -825,6 +902,11 @@ int main(int argc, char **argv)
 
     running = true;
 
+    pthread_mutex_init(&moved_players_lock, NULL);
+
+    pthread_t processing_thread;
+    pthread_create(&processing_thread, NULL, processing_loop, NULL);
+
     while (running) {
         i32 num_events = poll(server_pfds.fds, server_pfds.count, POLL_INFINITE_TIMEOUT);
 
@@ -852,6 +934,8 @@ int main(int argc, char **argv)
 
     sqlite3_close(server_db);
 
+    pthread_join(processing_thread, NULL);
+
     pollfd_set_shutdown(&server_pfds);
 
     {
@@ -867,7 +951,15 @@ int main(int argc, char **argv)
             HASH_DEL(socket_to_player_id_map, s);
             free(s);
         }
+
+        player_moved_t *pm, *tmp3;
+        HASH_ITER(hh, moved_players, pm, tmp3) {
+            HASH_DEL(moved_players, pm);
+            free(pm);
+        }
     }
+
+    pthread_mutex_destroy(&moved_players_lock);
 
     if (close(server_socket) == -1) {
         LOG_ERROR("error while closing the socket: %s\n", strerror(errno));

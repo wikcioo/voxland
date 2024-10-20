@@ -17,8 +17,7 @@ typedef struct {
     u32 current_window_width;
     u32 current_window_height;
     bool is_polygon_mode;
-    f32 delta_time;
-    f32 last_time;
+    bool player_moved;
     glm::vec3 camera_position;
     glm::vec3 camera_direction;
     glm::vec3 camera_up;
@@ -31,10 +30,12 @@ typedef struct {
     player_t *players; // uthash
     player_t *self;
     i32 client_socket;
+    f32 client_update_freq;
+    f32 client_update_period;
 } Game;
 
 typedef void (*pfn_game_init)(Game *game);
-typedef void (*pfn_game_update)(Game *game);
+typedef void (*pfn_game_update)(Game *game, f32 dt);
 typedef void (*pfn_game_shutdown)(Game *game);
 
 #define LIST_OF_GAME_HRFN \

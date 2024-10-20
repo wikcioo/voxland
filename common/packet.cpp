@@ -29,6 +29,37 @@ void deserialize_packet_txt_msg(void *data, packet_txt_msg_t *packet)
     packet->message = (char *) ((u8 *) data + sizeof(length));
 }
 
+u32 serialize_packet_player_batch_move(const packet_player_batch_move_t *packet, u8 **buffer)
+{
+    u32 payload_size = (u32) (sizeof(packet->count) + (packet->count * sizeof(player_id)) + (packet->count * 3 * sizeof(f32)));
+    *buffer = (u8 *) malloc(sizeof(packet_header_t) + payload_size);
+
+    u32 offset = sizeof(packet_header_t);
+
+    memcpy(*buffer + offset, &packet->count, sizeof(packet->count));
+    offset += sizeof(packet->count);
+
+    memcpy(*buffer + offset, packet->ids, packet->count * sizeof(player_id));
+    offset += (u32) (packet->count * sizeof(player_id));
+
+    memcpy(*buffer + offset, packet->positions, packet->count * 3 * sizeof(f32));
+
+    return payload_size;
+}
+
+void deserialize_packet_player_batch_move(void *data, packet_player_batch_move_t *packet)
+{
+    u32 count;
+    memcpy(&count, data, sizeof(count));
+    packet->count = count;
+
+    // Assuming the lifetime of void *data is longer than packet->ids.
+    packet->ids = (player_id *) ((u8 *) data + sizeof(count));
+
+    // Assuming the lifetime of void *data is longer than packet->positions.
+    packet->positions = (f32 *) ((u8 *) data + sizeof(count) + count * sizeof(player_id));
+}
+
 bool packet_send(i32 socket, u32 type, void *packet_data)
 {
     ASSERT(type > PACKET_TYPE_NONE && type < NUM_OF_PACKET_TYPES);
@@ -42,6 +73,9 @@ bool packet_send(i32 socket, u32 type, void *packet_data)
     switch (type) {
         case PACKET_TYPE_TXT_MSG: {
             header.payload_size = serialize_packet_txt_msg((packet_txt_msg_t *) packet_data, &buffer);
+        } break;
+        case PACKET_TYPE_PLAYER_BATCH_MOVE: {
+            header.payload_size = serialize_packet_player_batch_move((packet_player_batch_move_t *) packet_data, &buffer);
         } break;
         default: {
             // The packet is fixed size.

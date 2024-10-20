@@ -13,6 +13,7 @@ typedef enum {
     PACKET_TYPE_PLAYER_ADD,
     PACKET_TYPE_PLAYER_REMOVE,
     PACKET_TYPE_PLAYER_MOVE,
+    PACKET_TYPE_PLAYER_BATCH_MOVE,
     NUM_OF_PACKET_TYPES
 } packet_type_e;
 
@@ -65,6 +66,16 @@ typedef struct PACKED {
     f32 position[3];
 } packet_player_move_t;
 
+typedef struct PACKED {
+    u32 count;
+    player_id *ids;
+    f32 *positions; // array of position[3]
+} packet_player_batch_move_t;
+
+// Required for variable size packets.
+u32 serialize_packet_player_batch_move(const packet_player_batch_move_t *packet, u8 **buffer);
+void deserialize_packet_player_batch_move(void *data, packet_player_batch_move_t *packet);
+
 // C++20 does not support array designated initializers...
 // so make sure the order is the same as in packet_type_e enum.
 LOCAL const u32 PACKET_TYPE_SIZE[NUM_OF_PACKET_TYPES] = {
@@ -76,7 +87,8 @@ LOCAL const u32 PACKET_TYPE_SIZE[NUM_OF_PACKET_TYPES] = {
     sizeof(packet_player_join_res_t),
     sizeof(packet_player_add_t),
     sizeof(packet_player_remove_t),
-    sizeof(packet_player_move_t)
+    sizeof(packet_player_move_t),
+    sizeof(packet_player_batch_move_t)
 };
 
 bool packet_send(i32 socket, u32 type, void *packet_data);

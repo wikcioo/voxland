@@ -254,7 +254,7 @@ LOCAL void process_network_packet(u32 type, void *data)
         } break;
         case PACKET_TYPE_PLAYER_MOVE: {
             packet_player_move_t *packet = (packet_player_move_t *) data;
-            player_t *player;
+            player_t *player = NULL;
             HASH_FIND_INT(game.players, &packet->id, player);
             if (player == NULL) {
                 LOG_ERROR("failed to find player with id=%u to move\n", packet->id);
@@ -262,6 +262,23 @@ LOCAL void process_network_packet(u32 type, void *data)
             }
 
             memcpy(glm::value_ptr(player->position), packet->position, 3 * sizeof(f32));
+        } break;
+        case PACKET_TYPE_PLAYER_BATCH_MOVE: {
+            packet_player_batch_move_t packet;
+            deserialize_packet_player_batch_move(data, &packet);
+
+            for (u32 i = 0; i < packet.count; i++) {
+                player_t *player = NULL;
+                HASH_FIND_INT(game.players, &packet.ids[i], player);
+                if (player == NULL) {
+                    if (packet.ids[i] != game.self->id) {
+                        LOG_ERROR("failed to find player with id=%u to move\n", packet.ids[i]);
+                    }
+                    break;
+                }
+
+                memcpy(glm::value_ptr(player->position), &packet.positions[i * 3], 3 * sizeof(f32));
+            }
         } break;
         default: {
             LOG_ERROR("unknown packet type value `%u`\n", type);
@@ -612,6 +629,8 @@ int main(int argc, char **argv)
     glfwSetKeyCallback(game.window, glfw_key_callback);
     glfwSetCursorPosCallback(game.window, glfw_mouse_moved_callback);
 
+    glfwSwapInterval(0);
+
     u32 err = glewInit();
     if (err != GLEW_OK) {
         LOG_FATAL("failed to initialize glew: %s\n", glewGetErrorString(err));
@@ -644,6 +663,8 @@ int main(int argc, char **argv)
     game.self = (player_t *) malloc(sizeof(player_t));
     memset(game.self, 0, sizeof(player_t));
     game.client_socket = client_socket;
+    game.client_update_freq = 60.0f;
+    game.client_update_period = 1.0f / game.client_update_freq;
     game_init(&game);
 
     // Request to join
@@ -658,12 +679,14 @@ int main(int argc, char **argv)
         exit(EXIT_FAILURE);
     }
 
+    f32 delta_time = 0.0f;
+    f32 last_time = 0.0f;
     while (!glfwWindowShouldClose(game.window) && running) {
         f32 now = (f32) glfwGetTime();
-        game.delta_time = now - game.last_time;
-        game.last_time = now;
+        delta_time = now - last_time;
+        last_time = now;
 
-        game_update(&game);
+        game_update(&game, delta_time);
     }
 
     game_shutdown(&game);
