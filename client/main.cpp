@@ -280,6 +280,24 @@ LOCAL void process_network_packet(u32 type, void *data)
                 memcpy(glm::value_ptr(player->position), &packet.positions[i * 3], 3 * sizeof(f32));
             }
         } break;
+        case PACKET_TYPE_LIGHT_UPDATE: {
+            Packet_Light_Update *packet = (Packet_Light_Update *) data;
+            game.light.id = packet->id;
+            game.light.radius = packet->radius;
+            game.light.angular_velocity = packet->angular_velocity;
+            game.light.initial_position = glm::vec3(packet->initial_position[0], packet->initial_position[1], packet->initial_position[2]);
+            game.light.ambient = glm::vec3(packet->ambient[0], packet->ambient[1], packet->ambient[2]);
+            game.light.diffuse = glm::vec3(packet->diffuse[0], packet->diffuse[1], packet->diffuse[2]);
+            game.light.specular = glm::vec3(packet->specular[0], packet->specular[1], packet->specular[2]);
+            LOG_DEBUG("light updated:\n");
+            LOG_DEBUG("  - id: %u\n", game.light.id);
+            LOG_DEBUG("  - radius: %f\n", game.light.radius);
+            LOG_DEBUG("  - angular velocity: %f\n", game.light.angular_velocity);
+            LOG_DEBUG("  - initial position: (%f,%f,%f)\n", game.light.initial_position.x, game.light.initial_position.y, game.light.initial_position.z);
+            LOG_DEBUG("  - ambient color: (%f,%f,%f)\n", game.light.ambient.x, game.light.ambient.y, game.light.ambient.z);
+            LOG_DEBUG("  - diffuse color: (%f,%f,%f)\n", game.light.diffuse.x, game.light.diffuse.y, game.light.diffuse.z);
+            LOG_DEBUG("  - specular color: (%f,%f,%f)\n", game.light.specular.x, game.light.specular.y, game.light.specular.z);
+        } break;
         default: {
             LOG_ERROR("unknown packet type value `%u`\n", type);
         }

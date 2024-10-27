@@ -6,6 +6,7 @@
 
 #include "common/defines.h"
 #include "common/player_types.h"
+#include "common/entity_types.h"
 
 #define WINDOW_WIDTH 1280
 #define WINDOW_HEIGHT 720
@@ -27,6 +28,7 @@ typedef struct {
     u32 vao, vbo;
     u32 flat_color_shader;
     u32 lighting_shader;
+    Light light;
     Player *players; // uthash
     Player *self;
     i32 client_socket;

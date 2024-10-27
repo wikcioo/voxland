@@ -10,6 +10,7 @@
 
 #include "common/log.h"
 #include "common/packet.h"
+#include "common/clock.h"
 
 const char *vertex_shader_source =
     "#version 330 core\n"
@@ -254,21 +255,28 @@ void game_update(Game *game, f32 dt)
     glm::mat4 projection = glm::perspective(glm::radians(game->camera_fov), (f32) game->current_window_width / (f32) game->current_window_height, 0.1f, 100.0f);
     glm::mat4 view = glm::lookAt(game->camera_position, game->camera_position + game->camera_direction, game->camera_up);
 
-    f32 light_speed = 1.0f;
-    f32 radius = 5.0f;
-    f32 now = (f32) glfwGetTime();
-    glm::vec3 light_position = glm::vec3(glm::cos(now * light_speed) * radius, 3.0f, glm::sin(now * light_speed) * radius);
-
     glUseProgram(game->lighting_shader);
     glUniformMatrix4fv(glGetUniformLocation(game->lighting_shader, "projection"), 1, false, glm::value_ptr(projection));
     glUniformMatrix4fv(glGetUniformLocation(game->lighting_shader, "view"), 1, false, glm::value_ptr(view));
     glUniform3fv(glGetUniformLocation(game->lighting_shader, "camera_pos"), 1, glm::value_ptr(game->camera_position));
-    glUniform3fv(glGetUniformLocation(game->lighting_shader, "light.position"), 1, glm::value_ptr(light_position));
-    glUniform3f(glGetUniformLocation(game->lighting_shader, "light.ambient"), 0.2f, 0.2f, 0.2f);
-    glUniform3f(glGetUniformLocation(game->lighting_shader, "light.diffuse"), 0.5f, 0.5f, 0.5f);
-    glUniform3f(glGetUniformLocation(game->lighting_shader, "light.specular"), 1.0f, 1.0f, 1.0f);
     glUniform3f(glGetUniformLocation(game->lighting_shader, "mat.specular"), 0.5f, 0.5f, 0.5f);
     glUniform1f(glGetUniformLocation(game->lighting_shader, "mat.shininess"), 32.0f);
+
+    glm::vec3 current_light_position = {};
+    if (game->light.id != 0) {
+        f32 t = clock_get_absolute_time_sec();
+        current_light_position = glm::vec3(
+            game->light.initial_position.x + glm::cos(game->light.angular_velocity * t) * game->light.radius,
+            game->light.initial_position.y,
+            game->light.initial_position.z + glm::sin(game->light.angular_velocity * t) * game->light.radius
+        );
+
+        glUniform3fv(glGetUniformLocation(game->lighting_shader, "light.position"), 1, glm::value_ptr(current_light_position));
+        glUniform3fv(glGetUniformLocation(game->lighting_shader, "light.ambient"), 1, glm::value_ptr(game->light.ambient));
+        glUniform3fv(glGetUniformLocation(game->lighting_shader, "light.diffuse"), 1, glm::value_ptr(game->light.diffuse));
+        glUniform3fv(glGetUniformLocation(game->lighting_shader, "light.specular"), 1, glm::value_ptr(game->light.specular));
+    }
+
     glBindVertexArray(game->vao);
 
     // Render players
@@ -289,11 +297,10 @@ void game_update(Game *game, f32 dt)
         glDrawArrays(GL_TRIANGLES, 0, 36);
     }
 
-    {
-        // Render light
+    if (game->light.id != 0) {
         glUseProgram(game->flat_color_shader);
 
-        glm::mat4 light_model = glm::translate(glm::mat4(1.0f), light_position) * glm::scale(glm::mat4(1.0f), glm::vec3(0.25f));
+        glm::mat4 light_model = glm::translate(glm::mat4(1.0f), current_light_position) * glm::scale(glm::mat4(1.0f), glm::vec3(0.25f));
         glUniformMatrix4fv(glGetUniformLocation(game->flat_color_shader, "projection"), 1, false, glm::value_ptr(projection));
         glUniformMatrix4fv(glGetUniformLocation(game->flat_color_shader, "view"), 1, false, glm::value_ptr(view));
         glUniformMatrix4fv(glGetUniformLocation(game->flat_color_shader, "model"), 1, false, glm::value_ptr(light_model));

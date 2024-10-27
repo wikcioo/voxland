@@ -24,6 +24,7 @@
 #include "common/hexdump.h"
 #include "common/packet.h"
 #include "common/player_types.h"
+#include "common/entity_types.h"
 #include "uthash/uthash.h"
 
 #define SERVER_BACKLOG 10
@@ -51,6 +52,7 @@ LOCAL Socket_Player_Id_Pair *socket_to_player_id_map = NULL; // uthash
 LOCAL Player_Moved *moved_players = NULL; // uthash
 LOCAL pthread_mutex_t moved_players_lock;
 LOCAL player_id player_next_id = 1000;
+LOCAL Light light;
 
 void *get_in_addr(struct sockaddr *addr)
 {
@@ -309,6 +311,21 @@ LOCAL void handle_player_join_request(i32 client_socket, Packet_Player_Join_Req 
 
     // Add at the end so that the iteration above does not include the new player.
     HASH_ADD_INT(players, id, new_player);
+
+    {
+        // Send light update
+        Packet_Light_Update light_update = {};
+        light_update.id = light.id;
+        light_update.radius = light.radius;
+        light_update.angular_velocity = light.angular_velocity;
+        memcpy(light_update.initial_position, glm::value_ptr(light.initial_position), 3 * sizeof(f32));
+        memcpy(light_update.ambient, glm::value_ptr(light.ambient), 3 * sizeof(f32));
+        memcpy(light_update.diffuse, glm::value_ptr(light.diffuse), 3 * sizeof(f32));
+        memcpy(light_update.specular, glm::value_ptr(light.specular), 3 * sizeof(f32));
+        if (!packet_send(client_socket, PACKET_TYPE_LIGHT_UPDATE, &light_update)) {
+            LOG_ERROR("failed to send light_update update packet\n");
+        }
+    }
 
     // Add mapping of client socket to player id
     Socket_Player_Id_Pair *mapping = (Socket_Player_Id_Pair *) malloc(sizeof(Socket_Player_Id_Pair));
@@ -901,6 +918,14 @@ int main(int argc, char **argv)
     sigaction(SIGINT, &sa, NULL);
 
     running = true;
+
+    light.id = 1;
+    light.radius = 5.0f;
+    light.angular_velocity = 1.0f;
+    light.initial_position = glm::vec3(0.0f, 3.0f, 0.0f);
+    light.ambient = glm::vec3(0.2f, 0.2f, 0.2f);
+    light.diffuse = glm::vec3(0.5f, 0.5f, 0.5f);
+    light.specular = glm::vec3(1.0f, 1.0f, 1.0f);
 
     pthread_mutex_init(&moved_players_lock, NULL);
 

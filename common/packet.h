@@ -2,6 +2,7 @@
 
 #include "defines.h"
 #include "player_types.h"
+#include "entity_types.h"
 
 typedef enum {
     PACKET_TYPE_NONE,
@@ -14,6 +15,7 @@ typedef enum {
     PACKET_TYPE_PLAYER_REMOVE,
     PACKET_TYPE_PLAYER_MOVE,
     PACKET_TYPE_PLAYER_BATCH_MOVE,
+    PACKET_TYPE_LIGHT_UPDATE,
     NUM_OF_PACKET_TYPES
 } Packet_Type;
 
@@ -72,6 +74,16 @@ typedef struct PACKED {
     f32 *positions; // array of position[3]
 } Packet_Player_Batch_Move;
 
+typedef struct PACKED {
+    entity_id id;
+    f32 radius;
+    f32 angular_velocity;
+    f32 initial_position[3];
+    f32 ambient[3];
+    f32 diffuse[3];
+    f32 specular[3];
+} Packet_Light_Update;
+
 // Required for variable size packets.
 u32 serialize_packet_player_batch_move(const Packet_Player_Batch_Move *packet, u8 **buffer);
 void deserialize_packet_player_batch_move(void *data, Packet_Player_Batch_Move *packet);
@@ -88,7 +100,8 @@ LOCAL const u32 PACKET_TYPE_SIZE[NUM_OF_PACKET_TYPES] = {
     sizeof(Packet_Player_Add),
     sizeof(Packet_Player_Remove),
     sizeof(Packet_Player_Move),
-    sizeof(Packet_Player_Batch_Move)
+    sizeof(Packet_Player_Batch_Move),
+    sizeof(Packet_Light_Update)
 };
 
 bool packet_send(i32 socket, u32 type, void *packet_data);
