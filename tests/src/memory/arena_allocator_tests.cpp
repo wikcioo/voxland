@@ -5,7 +5,7 @@
 
 bool arena_allocator_create_and_destroy(void)
 {
-    arena_allocator_t allocator;
+    Arena_Allocator allocator;
     arena_allocator_create(sizeof(i32), 0, &allocator);
 
     expect_not_equal(allocator.memory, 0);
@@ -21,7 +21,7 @@ bool arena_allocator_single_allocation_all_space(void)
 {
     u64 arena_size = 10 * sizeof(u64);
 
-    arena_allocator_t allocator;
+    Arena_Allocator allocator;
     arena_allocator_create(arena_size, 0, &allocator);
 
     void *memory_block = arena_allocator_allocate(&allocator, arena_size);
@@ -36,7 +36,7 @@ bool arena_allocator_multi_allocation_all_space(void)
 {
     u64 num_allocations = 100;
 
-    arena_allocator_t allocator;
+    Arena_Allocator allocator;
     arena_allocator_create(num_allocations * sizeof(u64), 0, &allocator);
 
     void *memory_block;
@@ -54,7 +54,7 @@ bool arena_allocator_over_allocate(void)
 {
     u64 arena_size = 10 * sizeof(u64);
 
-    arena_allocator_t allocator;
+    Arena_Allocator allocator;
     arena_allocator_create(arena_size, 0, &allocator);
 
     void *memory_block;
@@ -75,7 +75,7 @@ bool arena_allocator_allocate_all_space_and_free_all(void)
 {
     u64 arena_size = 10 * sizeof(u64);
 
-    arena_allocator_t allocator;
+    Arena_Allocator allocator;
     arena_allocator_create(arena_size, 0, &allocator);
 
     void *memory_block = arena_allocator_allocate(&allocator, arena_size);

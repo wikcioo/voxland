@@ -18,7 +18,7 @@ void get_current_time_as_cstr(char *buf, u32 buf_len)
     strftime(buf, buf_len, "%H:%M:%S", local_time);
 }
 
-void log_message(log_level_e level, const char *message, ...)
+void log_message(Log_Level level, const char *message, ...)
 {
     FILE *stream = level > LOG_LEVEL_WARN ? stderr : stdout;
 

@@ -8,18 +8,18 @@
 #include "log.h"
 #include "asserts.h"
 
-u32 serialize_packet_txt_msg(const packet_txt_msg_t *packet, u8 **buffer)
+u32 serialize_packet_txt_msg(const Packet_Text_Message *packet, u8 **buffer)
 {
     u32 payload_size = sizeof(packet->length) + packet->length;
-    *buffer = (u8 *) malloc(sizeof(packet_header_t) + payload_size);
+    *buffer = (u8 *) malloc(sizeof(Packet_Header) + payload_size);
 
-    memcpy(*buffer + sizeof(packet_header_t), &packet->length, sizeof(packet->length));
-    memcpy(*buffer + sizeof(packet_header_t) + sizeof(packet->length), packet->message, packet->length);
+    memcpy(*buffer + sizeof(Packet_Header), &packet->length, sizeof(packet->length));
+    memcpy(*buffer + sizeof(Packet_Header) + sizeof(packet->length), packet->message, packet->length);
 
     return payload_size;
 }
 
-void deserialize_packet_txt_msg(void *data, packet_txt_msg_t *packet)
+void deserialize_packet_txt_msg(void *data, Packet_Text_Message *packet)
 {
     u32 length;
     memcpy(&length, data, sizeof(length));
@@ -29,12 +29,12 @@ void deserialize_packet_txt_msg(void *data, packet_txt_msg_t *packet)
     packet->message = (char *) ((u8 *) data + sizeof(length));
 }
 
-u32 serialize_packet_player_batch_move(const packet_player_batch_move_t *packet, u8 **buffer)
+u32 serialize_packet_player_batch_move(const Packet_Player_Batch_Move *packet, u8 **buffer)
 {
     u32 payload_size = (u32) (sizeof(packet->count) + (packet->count * sizeof(player_id)) + (packet->count * 3 * sizeof(f32)));
-    *buffer = (u8 *) malloc(sizeof(packet_header_t) + payload_size);
+    *buffer = (u8 *) malloc(sizeof(Packet_Header) + payload_size);
 
-    u32 offset = sizeof(packet_header_t);
+    u32 offset = sizeof(Packet_Header);
 
     memcpy(*buffer + offset, &packet->count, sizeof(packet->count));
     offset += sizeof(packet->count);
@@ -47,7 +47,7 @@ u32 serialize_packet_player_batch_move(const packet_player_batch_move_t *packet,
     return payload_size;
 }
 
-void deserialize_packet_player_batch_move(void *data, packet_player_batch_move_t *packet)
+void deserialize_packet_player_batch_move(void *data, Packet_Player_Batch_Move *packet)
 {
     u32 count;
     memcpy(&count, data, sizeof(count));
@@ -65,30 +65,30 @@ bool packet_send(i32 socket, u32 type, void *packet_data)
     ASSERT(type > PACKET_TYPE_NONE && type < NUM_OF_PACKET_TYPES);
     ASSERT(packet_data);
 
-    packet_header_t header = { .type = type, .payload_size = 0 };
+    Packet_Header header = { .type = type, .payload_size = 0 };
     u8 *buffer = NULL;
 
     // Handle variable size packets differently.
     // NOTE: serialize_packet_* functions allocate memory for both header and payload
     switch (type) {
         case PACKET_TYPE_TXT_MSG: {
-            header.payload_size = serialize_packet_txt_msg((packet_txt_msg_t *) packet_data, &buffer);
+            header.payload_size = serialize_packet_txt_msg((Packet_Text_Message *) packet_data, &buffer);
         } break;
         case PACKET_TYPE_PLAYER_BATCH_MOVE: {
-            header.payload_size = serialize_packet_player_batch_move((packet_player_batch_move_t *) packet_data, &buffer);
+            header.payload_size = serialize_packet_player_batch_move((Packet_Player_Batch_Move *) packet_data, &buffer);
         } break;
         default: {
             // The packet is fixed size.
             header.payload_size = PACKET_TYPE_SIZE[type];
-            buffer = (u8 *) malloc(sizeof(packet_header_t) + header.payload_size);
-            memcpy(buffer + sizeof(packet_header_t), packet_data, header.payload_size);
+            buffer = (u8 *) malloc(sizeof(Packet_Header) + header.payload_size);
+            memcpy(buffer + sizeof(Packet_Header), packet_data, header.payload_size);
         }
     }
 
     ASSERT(buffer != NULL);
 
-    memcpy(buffer, (void *) &header, sizeof(packet_header_t));
-    u32 buffer_size = sizeof(packet_header_t) + header.payload_size;
+    memcpy(buffer, (void *) &header, sizeof(Packet_Header));
+    u32 buffer_size = sizeof(Packet_Header) + header.payload_size;
 
     // TODO: Change it to add data to the queue instead of sending it straightaway
     i64 bytes_sent_total = 0;

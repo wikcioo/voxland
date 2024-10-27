@@ -35,20 +35,20 @@ typedef struct {
     i32 socket;
     player_id id;
     UT_hash_handle hh;
-} socket_player_id_pair_t;
+} Socket_Player_Id_Pair;
 
 typedef struct {
     player_id id;
     UT_hash_handle hh;
-} player_moved_t;
+} Player_Moved;
 
 LOCAL bool running;
 LOCAL i32 server_socket;
-LOCAL pollfd_set_t server_pfds;
+LOCAL Pollfd_Set server_pfds;
 LOCAL sqlite3 *server_db = NULL;
-LOCAL player_t *players = NULL; // uthash
-LOCAL socket_player_id_pair_t *socket_to_player_id_map = NULL; // uthash
-LOCAL player_moved_t *moved_players = NULL; // uthash
+LOCAL Player *players = NULL; // uthash
+LOCAL Socket_Player_Id_Pair *socket_to_player_id_map = NULL; // uthash
+LOCAL Player_Moved *moved_players = NULL; // uthash
 LOCAL pthread_mutex_t moved_players_lock;
 LOCAL player_id player_next_id = 1000;
 
@@ -111,7 +111,7 @@ bool is_player_already_connected(const char *username, u8 length)
 {
     // TODO: Optimize
     // Not ideal to iterate through all players and compare strings.
-    for (player_t *player = players; player != NULL; player = (player_t *) player->hh.next) {
+    for (Player *player = players; player != NULL; player = (Player *) player->hh.next) {
         if (strncmp(username, player->username, length) == 0) {
             return true;
         }
@@ -224,7 +224,7 @@ LOCAL glm::vec3 get_random_color(void)
     return glm::vec3(r, g, b);
 }
 
-LOCAL void handle_player_join_request(i32 client_socket, packet_player_join_req_t *packet)
+LOCAL void handle_player_join_request(i32 client_socket, Packet_Player_Join_Req *packet)
 {
     ASSERT(packet->username_length <= PLAYER_USERNAME_MAX_LEN && packet->password_length <= PLAYER_PASSWORD_MAX_LEN);
 
@@ -233,7 +233,7 @@ LOCAL void handle_player_join_request(i32 client_socket, packet_player_join_req_
     memcpy(username, packet->username, packet->username_length);
     memcpy(password, packet->password, packet->password_length);
 
-    packet_player_join_res_t response = {};
+    Packet_Player_Join_Res response = {};
     if (!player_authenticate(username, password)) {
         LOG_WARN("player authentication failed for `%s`\n", username);
         response.approved = false;
@@ -257,7 +257,7 @@ LOCAL void handle_player_join_request(i32 client_socket, packet_player_join_req_
     glm::vec3 color = get_random_color();
     glm::vec3 position = glm::vec3(0.0f);
 
-    player_t *new_player = (player_t *) malloc(sizeof(player_t));
+    Player *new_player = (Player *) malloc(sizeof(Player));
     new_player->socket = client_socket;
     new_player->id = player_next_id++;
     memcpy(new_player->username, packet->username, packet->username_length);
@@ -275,15 +275,15 @@ LOCAL void handle_player_join_request(i32 client_socket, packet_player_join_req_
 
     {
         // Send new player to all existing players
-        packet_player_add_t player_add = {};
+        Packet_Player_Add player_add = {};
         player_add.id = new_player->id;
         player_add.username_length = packet->username_length;
         memcpy(player_add.username, new_player->username, player_add.username_length);
         memcpy(player_add.color, glm::value_ptr(new_player->color), 3 * sizeof(f32));
         memcpy(player_add.position, glm::value_ptr(new_player->position), 3 * sizeof(f32));
 
-        player_t *player;
-        for (player = players; player != NULL; player = (player_t *) player->hh.next) {
+        Player *player;
+        for (player = players; player != NULL; player = (Player *) player->hh.next) {
             if (!packet_send(player->socket, PACKET_TYPE_PLAYER_ADD, &player_add)) {
                 LOG_ERROR("failed to send new player to existing player socket=%d id=%u\n", player->socket, player->id);
             }
@@ -292,9 +292,9 @@ LOCAL void handle_player_join_request(i32 client_socket, packet_player_join_req_
 
     {
         // Send all existing players to the new player
-        player_t *player;
-        for (player = players; player != NULL; player = (player_t *) player->hh.next) {
-            packet_player_add_t player_add = {};
+        Player *player;
+        for (player = players; player != NULL; player = (Player *) player->hh.next) {
+            Packet_Player_Add player_add = {};
             player_add.id = player->id;
             player_add.username_length = (u8) strlen(player->username);
             memcpy(player_add.username, player->username, player_add.username_length);
@@ -311,7 +311,7 @@ LOCAL void handle_player_join_request(i32 client_socket, packet_player_join_req_
     HASH_ADD_INT(players, id, new_player);
 
     // Add mapping of client socket to player id
-    socket_player_id_pair_t *mapping = (socket_player_id_pair_t *) malloc(sizeof(socket_player_id_pair_t));
+    Socket_Player_Id_Pair *mapping = (Socket_Player_Id_Pair *) malloc(sizeof(Socket_Player_Id_Pair));
     mapping->socket = client_socket;
     mapping->id = new_player->id;
     HASH_ADD_INT(socket_to_player_id_map, socket, mapping);
@@ -326,22 +326,22 @@ LOCAL void process_network_packet(i32 client_socket, u32 type, void *data)
         } break;
         case PACKET_TYPE_PING: {
             LOG_TRACE("received ping packet\n");
-            packet_send(client_socket, PACKET_TYPE_PING, (packet_ping_t *) data);
+            packet_send(client_socket, PACKET_TYPE_PING, (Packet_Ping *) data);
         } break;
         case PACKET_TYPE_TXT_MSG: {
-            packet_txt_msg_t packet;
+            Packet_Text_Message packet;
             deserialize_packet_txt_msg(data, &packet);
             LOG_TRACE("received text message of length %lu: %s\n", packet.length, packet.message);
         } break;
         case PACKET_TYPE_PLAYER_JOIN_REQ: {
-            packet_player_join_req_t *packet = (packet_player_join_req_t *) data;
+            Packet_Player_Join_Req *packet = (Packet_Player_Join_Req *) data;
             handle_player_join_request(client_socket, packet);
         } break;
         case PACKET_TYPE_PLAYER_REMOVE: {
-            packet_player_remove_t *remove = (packet_player_remove_t *) data;
+            Packet_Player_Remove *remove = (Packet_Player_Remove *) data;
 
-            player_t *player;
-            for (player = players; player != NULL; player = (player_t *) player->hh.next) {
+            Player *player;
+            for (player = players; player != NULL; player = (Player *) player->hh.next) {
                 // Do not send remove packet to the player who is disconnecting (client_socket)
                 if (player->socket != client_socket) {
                     if (!packet_send(player->socket, PACKET_TYPE_PLAYER_REMOVE, remove)) {
@@ -350,14 +350,14 @@ LOCAL void process_network_packet(i32 client_socket, u32 type, void *data)
                 }
             }
 
-            socket_player_id_pair_t *mapping = NULL;
+            Socket_Player_Id_Pair *mapping = NULL;
             HASH_FIND_INT(socket_to_player_id_map, &client_socket, mapping);
             ASSERT(mapping != NULL);
             LOG_DEBUG("removed mapping between socket=%d -> player_id=%u\n", mapping->socket, mapping->id);
             HASH_DEL(socket_to_player_id_map, mapping);
             free(mapping);
 
-            player_t *p;
+            Player *p;
             HASH_FIND_INT(players, &remove->id, p);
             if (p) {
                 HASH_DEL(players, p);
@@ -371,10 +371,10 @@ LOCAL void process_network_packet(i32 client_socket, u32 type, void *data)
             close(client_socket);
         } break;
         case PACKET_TYPE_PLAYER_MOVE: {
-            packet_player_move_t *packet = (packet_player_move_t *) data;
+            Packet_Player_Move *packet = (Packet_Player_Move *) data;
 
             // Update locally
-            player_t *player;
+            Player *player;
             HASH_FIND_INT(players, &packet->id, player);
             if (player != NULL) {
                 memcpy(glm::value_ptr(player->position), packet->position, 3 * sizeof(f32));
@@ -385,14 +385,14 @@ LOCAL void process_network_packet(i32 client_socket, u32 type, void *data)
 
             // Aggregate player moves by saving ids of players that moved within the interval
             // instead of sending updates right away.
-            player_moved_t *player_moved = NULL;
+            Player_Moved *player_moved = NULL;
             pthread_mutex_lock(&moved_players_lock);
             HASH_FIND_INT(moved_players, &packet->id, player_moved);
             if (player_moved == NULL) {
                 // TODO: Replace malloc with scratch buffer, because the elements are short lived
                 // (they need to be valid only until the aggregated moves are broadcasted to players)
                 // and to make the allocation faster, since it's inside a mutex.
-                player_moved = (player_moved_t *) malloc(sizeof(player_moved_t));
+                player_moved = (Player_Moved *) malloc(sizeof(Player_Moved));
                 player_moved->id = packet->id;
                 HASH_ADD_INT(moved_players, id, player_moved);
             }
@@ -416,15 +416,15 @@ bool receive_client_data(i32 client_socket, u8 *recv_buffer, u32 buffer_size, i6
             LOG_INFO("orderly shutdown of client with socket=%d\n", client_socket);
 
             // Update other players that the user disconnected if the mapping exists
-            socket_player_id_pair_t *mapping;
+            Socket_Player_Id_Pair *mapping;
             HASH_FIND_INT(socket_to_player_id_map, &client_socket, mapping);
 
             if (mapping != NULL) {
                 LOG_DEBUG("removed mapping between socket=%d -> player_id=%u\n", mapping->socket, mapping->id);
-                packet_player_remove_t remove = { .id = mapping->id };
+                Packet_Player_Remove remove = { .id = mapping->id };
 
-                player_t *player;
-                for (player = players; player != NULL; player = (player_t *) player->hh.next) {
+                Player *player;
+                for (player = players; player != NULL; player = (Player *) player->hh.next) {
                     // Do not send remove packet to the player who is disconnecting (client_socket)
                     if (player->socket != client_socket) {
                         if (!packet_send(player->socket, PACKET_TYPE_PLAYER_REMOVE, &remove)) {
@@ -479,7 +479,7 @@ void handle_client_event(i32 client_socket)
     // Iterate over all the packets included in single TCP data reception.
     // Optionally, read more data to complete the payload.
     for (;;) {
-        packet_header_t *header = (packet_header_t *) bufptr;
+        Packet_Header *header = (Packet_Header *) bufptr;
 
         if (header->type >= NUM_OF_PACKET_TYPES) {
             LOG_ERROR("received unknown header type `%u`\n", header->type);
@@ -511,7 +511,7 @@ void handle_client_event(i32 client_socket)
             // LOG_DEBUG("remaining_bytes_to_parse = %lu\n", remaining_bytes_to_parse);
             if (remaining_bytes_to_parse >= header_size) {
                 // Enough unparsed bytes to read the header.
-                packet_header_t *next_header = (packet_header_t *) bufptr;
+                Packet_Header *next_header = (Packet_Header *) bufptr;
                 if (next_header->type <= PACKET_TYPE_NONE || next_header->type >= NUM_OF_PACKET_TYPES) {
                     break;
                 }
@@ -686,14 +686,14 @@ void *processing_loop(void *args)
     while (running) {
         // Copy moved player ids for later processing to unlock the mutex quicker.
         pthread_mutex_lock(&moved_players_lock);
-        for (player_moved_t *pm = moved_players; pm != NULL; pm = (player_moved_t *) pm->hh.next) {
+        for (Player_Moved *pm = moved_players; pm != NULL; pm = (Player_Moved *) pm->hh.next) {
             ASSERT(moved_ids_count < MAX_MOVED_IDS);
             moved_ids[moved_ids_count++] = pm->id;
         }
 
         if (moved_ids_count > 0) {
             // Clear the moved players uthash.
-            player_moved_t *pm, *tmp;
+            Player_Moved *pm, *tmp;
             HASH_ITER(hh, moved_players, pm, tmp) {
                 HASH_DEL(moved_players, pm);
                 free(pm);
@@ -705,20 +705,20 @@ void *processing_loop(void *args)
         // NOTE: Perhaps we should also copy players uthash before copying values from it.
         if (moved_ids_count > 0) {
             // Prepare batch move packet.
-            packet_player_batch_move_t packet = {};
+            Packet_Player_Batch_Move packet = {};
             packet.count = moved_ids_count;
             packet.ids = (player_id *) malloc(packet.count * sizeof(player_id));
             packet.positions = (f32 *) malloc(packet.count * 3 * sizeof(f32));
             for (u32 i = 0; i < moved_ids_count; i++) {
                 packet.ids[i] = moved_ids[i];
-                player_t *player = NULL;
+                Player *player = NULL;
                 HASH_FIND_INT(players, &moved_ids[i], player);
                 ASSERT(player != NULL);
                 memcpy(&packet.positions[i * 3], glm::value_ptr(player->position), 3 * sizeof(f32));
             }
 
             // Send batch updates to players.
-            for (player_t *player = players; player != NULL; player = (player_t *) player->hh.next) {
+            for (Player *player = players; player != NULL; player = (Player *) player->hh.next) {
                 if (!packet_send(player->socket, PACKET_TYPE_PLAYER_BATCH_MOVE, &packet)) {
                     LOG_ERROR("failed to send player batch move packet\n");
                 }
@@ -940,19 +940,19 @@ int main(int argc, char **argv)
 
     {
         // uthash cleanup
-        player_t *p, *tmp1;
+        Player *p, *tmp1;
         HASH_ITER(hh, players, p, tmp1) {
             HASH_DEL(players, p);
             free(p);
         }
 
-        socket_player_id_pair_t *s, *tmp2;
+        Socket_Player_Id_Pair *s, *tmp2;
         HASH_ITER(hh, socket_to_player_id_map, s, tmp2) {
             HASH_DEL(socket_to_player_id_map, s);
             free(s);
         }
 
-        player_moved_t *pm, *tmp3;
+        Player_Moved *pm, *tmp3;
         HASH_ITER(hh, moved_players, pm, tmp3) {
             HASH_DEL(moved_players, pm);
             free(pm);

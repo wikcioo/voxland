@@ -27,8 +27,8 @@ typedef struct {
     u32 vao, vbo;
     u32 flat_color_shader;
     u32 lighting_shader;
-    player_t *players; // uthash
-    player_t *self;
+    Player *players; // uthash
+    Player *self;
     i32 client_socket;
     f32 client_update_freq;
     f32 client_update_period;

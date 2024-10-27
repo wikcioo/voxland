@@ -76,7 +76,7 @@ LOCAL void ping_server(void)
     ASSERT(client_socket > 2);
 
     u64 time_now = clock_get_absolute_time_ns();
-    packet_ping_t ping_packet = {
+    Packet_Ping ping_packet = {
         .time = time_now
     };
 
@@ -89,7 +89,7 @@ LOCAL void send_text_message_to_server(const char *message)
 {
     ASSERT(client_socket > 2);
 
-    packet_txt_msg_t packet = {
+    Packet_Text_Message packet = {
         .length = (u32) strlen(message),
         .message = (char *) message
     };
@@ -200,13 +200,13 @@ LOCAL void process_network_packet(u32 type, void *data)
             LOG_WARN("ignoring received packet of type PACKET_TYPE_NONE\n");
         } break;
         case PACKET_TYPE_PING: {
-            packet_ping_t *packet = (packet_ping_t *) data;
+            Packet_Ping *packet = (Packet_Ping *) data;
             u64 time_now = clock_get_absolute_time_ns();
             f64 ping_ms = (f64) (time_now - packet->time) / 1000000.0;
             LOG_TRACE("ping = %fms\n", ping_ms);
         } break;
         case PACKET_TYPE_PLAYER_JOIN_RES: {
-            packet_player_join_res_t *packet = (packet_player_join_res_t *) data;
+            Packet_Player_Join_Res *packet = (Packet_Player_Join_Res *) data;
             if (!packet->approved) {
                 LOG_ERROR("client join request has been rejected by the server\n");
                 // For now just terminate the client.
@@ -221,16 +221,16 @@ LOCAL void process_network_packet(u32 type, void *data)
             LOG_DEBUG("approved by the server with id=%u color=(%f,%f,%f)\n", packet->id, packet->color[0], packet->color[1], packet->color[2]);
         } break;
         case PACKET_TYPE_PLAYER_ADD: {
-            packet_player_add_t *packet = (packet_player_add_t *) data;
+            Packet_Player_Add *packet = (Packet_Player_Add *) data;
 
-            player_t *player;
+            Player *player;
             HASH_FIND_INT(game.players, &packet->id, player);
             if (player != NULL) {
                 LOG_ERROR("player with id=%u already exists\n", packet->id);
                 break;
             }
 
-            player = (player_t *) malloc(sizeof(*player));
+            player = (Player *) malloc(sizeof(*player));
             memset(player, 0, sizeof(*player));
             // TODO: move player init to a function
             player->id = packet->id;
@@ -241,8 +241,8 @@ LOCAL void process_network_packet(u32 type, void *data)
             LOG_DEBUG("added player: username='%s' id=%u position=(%f,%f,%f)\n", player->username, player->id, player->position.x, player->position.y, player->position.z);
         } break;
         case PACKET_TYPE_PLAYER_REMOVE: {
-            packet_player_remove_t *packet = (packet_player_remove_t *) data;
-            player_t *player;
+            Packet_Player_Remove *packet = (Packet_Player_Remove *) data;
+            Player *player;
             HASH_FIND_INT(game.players, &packet->id, player);
             if (player == NULL) {
                 LOG_ERROR("failed to find player with id=%u to remove\n", packet->id);
@@ -253,8 +253,8 @@ LOCAL void process_network_packet(u32 type, void *data)
             free(player); // NOTE: maybe we want to keep the data for further use
         } break;
         case PACKET_TYPE_PLAYER_MOVE: {
-            packet_player_move_t *packet = (packet_player_move_t *) data;
-            player_t *player = NULL;
+            Packet_Player_Move *packet = (Packet_Player_Move *) data;
+            Player *player = NULL;
             HASH_FIND_INT(game.players, &packet->id, player);
             if (player == NULL) {
                 LOG_ERROR("failed to find player with id=%u to move\n", packet->id);
@@ -264,11 +264,11 @@ LOCAL void process_network_packet(u32 type, void *data)
             memcpy(glm::value_ptr(player->position), packet->position, 3 * sizeof(f32));
         } break;
         case PACKET_TYPE_PLAYER_BATCH_MOVE: {
-            packet_player_batch_move_t packet;
+            Packet_Player_Batch_Move packet;
             deserialize_packet_player_batch_move(data, &packet);
 
             for (u32 i = 0; i < packet.count; i++) {
-                player_t *player = NULL;
+                Player *player = NULL;
                 HASH_FIND_INT(game.players, &packet.ids[i], player);
                 if (player == NULL) {
                     if (packet.ids[i] != game.self->id) {
@@ -316,7 +316,7 @@ LOCAL void handle_incoming_server_data(void)
     // Iterate over all the packets included in single TCP data reception.
     // Optionally, read more data to complete the payload.
     for (;;) {
-        packet_header_t *header = (packet_header_t *) bufptr;
+        Packet_Header *header = (Packet_Header *) bufptr;
 
         if (header->type >= NUM_OF_PACKET_TYPES) {
             LOG_ERROR("received unknown header type `%u`\n", header->type);
@@ -348,7 +348,7 @@ LOCAL void handle_incoming_server_data(void)
             LOG_DEBUG("remaining_bytes_to_parse = %lu\n", remaining_bytes_to_parse);
             if (remaining_bytes_to_parse >= header_size) {
                 // Enough unparsed bytes to read the header.
-                packet_header_t *next_header = (packet_header_t *) bufptr;
+                Packet_Header *next_header = (Packet_Header *) bufptr;
                 if (next_header->type <= PACKET_TYPE_NONE || next_header->type >= NUM_OF_PACKET_TYPES) {
                     break;
                 }
@@ -660,15 +660,15 @@ int main(int argc, char **argv)
         exit(EXIT_FAILURE);
     }
 
-    game.self = (player_t *) malloc(sizeof(player_t));
-    memset(game.self, 0, sizeof(player_t));
+    game.self = (Player *) malloc(sizeof(Player));
+    memset(game.self, 0, sizeof(Player));
     game.client_socket = client_socket;
     game.client_update_freq = 60.0f;
     game.client_update_period = 1.0f / game.client_update_freq;
     game_init(&game);
 
     // Request to join
-    packet_player_join_req_t join_req = {};
+    Packet_Player_Join_Req join_req = {};
     join_req.username_length = (u8) strlen(username);
     memcpy(join_req.username, username, join_req.username_length);
     join_req.password_length = (u8) strlen(password);
@@ -691,7 +691,7 @@ int main(int argc, char **argv)
 
     game_shutdown(&game);
 
-    packet_player_remove_t player_remove_packet = { .id = game.self->id };
+    Packet_Player_Remove player_remove_packet = { .id = game.self->id };
     if (!packet_send(client_socket, PACKET_TYPE_PLAYER_REMOVE, &player_remove_packet)) {
         LOG_ERROR("failed to send player remove packet\n");
     }
@@ -700,7 +700,7 @@ int main(int argc, char **argv)
 
     {
         // uthash cleanup
-        player_t *p, *tmp1;
+        Player *p, *tmp1;
         HASH_ITER(hh, game.players, p, tmp1) {
             HASH_DEL(game.players, p);
             free(p);

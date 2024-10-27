@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-void pollfd_set_init(u32 initial_capacity, pollfd_set_t *out_pfds)
+void pollfd_set_init(u32 initial_capacity, Pollfd_Set *out_pfds)
 {
     out_pfds->count = 0;
     out_pfds->capacity = initial_capacity;
@@ -14,14 +14,14 @@ void pollfd_set_init(u32 initial_capacity, pollfd_set_t *out_pfds)
     memset(out_pfds->fds, 0, fds_size);
 }
 
-void pollfd_set_shutdown(pollfd_set_t *pfds)
+void pollfd_set_shutdown(Pollfd_Set *pfds)
 {
     pfds->count = 0;
     pfds->capacity = 0;
     free(pfds->fds);
 }
 
-void pollfd_set_add(pollfd_set_t *pfds, i32 fd)
+void pollfd_set_add(Pollfd_Set *pfds, i32 fd)
 {
     if (pfds->count + 1 >= pfds->capacity) {
         void *ptr = realloc((void *) pfds->fds, pfds->capacity * 2);
@@ -38,7 +38,7 @@ void pollfd_set_add(pollfd_set_t *pfds, i32 fd)
     pfds->count++;
 }
 
-void pollfd_set_remove(pollfd_set_t *pfds, i32 fd)
+void pollfd_set_remove(Pollfd_Set *pfds, i32 fd)
 {
     for (u32 i = 0; i < pfds->count; i++) {
         if (pfds->fds[i].fd == fd) {

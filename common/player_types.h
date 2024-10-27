@@ -19,4 +19,4 @@ typedef struct {
     glm::vec3 color;
     glm::vec3 position;
     UT_hash_handle hh;
-} player_t;
+} Player;

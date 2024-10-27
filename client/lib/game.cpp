@@ -147,7 +147,7 @@ void process_input(Game *game, f32 dt)
         game->player_moved = false;
         acc_updt = 0.0f;
 
-        packet_player_move_t packet = {};
+        Packet_Player_Move packet = {};
         packet.id = game->self->id;
         memcpy(packet.position, glm::value_ptr(game->self->position), 3 * sizeof(f32));
 
@@ -272,7 +272,7 @@ void game_update(Game *game, f32 dt)
     glBindVertexArray(game->vao);
 
     // Render players
-    for (player_t *player = game->players; player != NULL; player = (player_t *) player->hh.next) {
+    for (Player *player = game->players; player != NULL; player = (Player *) player->hh.next) {
         glm::mat4 model = glm::translate(glm::mat4(1.0f), player->position);
         glUniformMatrix4fv(glGetUniformLocation(game->lighting_shader, "model"), 1, false, glm::value_ptr(model));
         glUniform3fv(glGetUniformLocation(game->lighting_shader, "mat.ambient"), 1, glm::value_ptr(player->color));

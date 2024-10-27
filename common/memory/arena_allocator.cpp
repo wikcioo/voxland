@@ -7,7 +7,7 @@
 #include "asserts.h"
 #include "size_unit.h"
 
-void arena_allocator_create(u64 total_size, void *memory, arena_allocator_t *out_allocator)
+void arena_allocator_create(u64 total_size, void *memory, Arena_Allocator *out_allocator)
 {
     ASSERT(out_allocator);
 
@@ -23,7 +23,7 @@ void arena_allocator_create(u64 total_size, void *memory, arena_allocator_t *out
     }
 }
 
-void arena_allocator_destroy(arena_allocator_t *allocator)
+void arena_allocator_destroy(Arena_Allocator *allocator)
 {
     ASSERT(allocator && allocator->memory);
 
@@ -47,12 +47,12 @@ LOCAL u64 align_forward(u64 ptr, u64 align)
     return ptr;
 }
 
-void *arena_allocator_allocate(arena_allocator_t *allocator, u64 size)
+void *arena_allocator_allocate(Arena_Allocator *allocator, u64 size)
 {
     return arena_allocator_allocate_align(allocator, size, DEFAULT_ARENA_ALIGNMENT);
 }
 
-void *arena_allocator_allocate_align(arena_allocator_t *allocator, u64 size, u64 align)
+void *arena_allocator_allocate_align(Arena_Allocator *allocator, u64 size, u64 align)
 {
     ASSERT(allocator && allocator->memory);
 
@@ -80,7 +80,7 @@ void *arena_allocator_allocate_align(arena_allocator_t *allocator, u64 size, u64
     return ptr;
 }
 
-void arena_allocator_free_all(arena_allocator_t *allocator)
+void arena_allocator_free_all(Arena_Allocator *allocator)
 {
     ASSERT(allocator && allocator->memory);
     allocator->current_offset = 0;

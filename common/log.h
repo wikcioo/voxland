@@ -47,9 +47,9 @@ typedef enum {
     LOG_LEVEL_WARN,
     LOG_LEVEL_ERROR,
     LOG_LEVEL_FATAL
-} log_level_e;
+} Log_Level;
 
-void log_message(log_level_e level, const char *message, ...);
+void log_message(Log_Level level, const char *message, ...);
 
 #if ENABLE_TRACE_LOG
     #define LOG_TRACE(message, ...) log_message(LOG_LEVEL_TRACE, message, ##__VA_ARGS__)
