@@ -28,7 +28,7 @@ SERVER_INCS    := -I. -Ithird_party
 SERVER_SOURCES := $(wildcard server/*.cpp)
 SERVER_OBJECTS := $(addprefix $(BUILD_DIR)/server/, $(addsuffix .cpp.o, $(basename $(notdir $(SERVER_SOURCES)))))
 
-COMMON_INCS    := -Ithird_party
+COMMON_INCS    := -Ithird_party -I.
 COMMON_SOURCES := $(wildcard common/*.cpp)
 COMMON_SOURCES += $(wildcard common/memory/*.cpp)
 COMMON_SOURCES += $(wildcard common/collections/*.cpp)
@@ -80,10 +80,10 @@ $(BUILD_DIR)/common/%.cpp.o: common/%.cpp
 	$(CXX) -c -fPIC $< $(COMMON_INCS) $(CXXFLAGS) -o $@
 
 $(BUILD_DIR)/common/%.cpp.o: common/memory/%.cpp
-	$(CXX) -c -fPIC $< $(CXXFLAGS) -Icommon -o $@
+	$(CXX) -c -fPIC $< $(COMMON_INCS) $(CXXFLAGS) -Icommon -o $@
 
 $(BUILD_DIR)/common/%.cpp.o: common/collections/%.cpp
-	$(CXX) -c -fPIC $< $(CXXFLAGS) -Icommon -o $@
+	$(CXX) -c -fPIC $< $(COMMON_INCS) $(CXXFLAGS) -Icommon -o $@
 
 clean:
 	rm -rf $(BUILD_DIR)

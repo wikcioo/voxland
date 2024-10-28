@@ -3,9 +3,9 @@
 #include <stdlib.h>
 #include <memory.h>
 
-#include "log.h"
-#include "asserts.h"
-#include "size_unit.h"
+#include "common/log.h"
+#include "common/asserts.h"
+#include "common/size_unit.h"
 
 void arena_allocator_create(u64 total_size, void *memory, Arena_Allocator *out_allocator)
 {

@@ -3,7 +3,7 @@
 #include <memory.h>
 #include <stdlib.h>
 
-#include "asserts.h"
+#include "common/asserts.h"
 
 #define HEADER_SIZE (DARRAY_FIELD_COUNT * sizeof(u64))
 
