@@ -2,6 +2,7 @@ BUILD_DIR  := build
 TESTS_DIR  := src
 COMMON_DIR := ../common
 
+TEST_INCS    := -I../
 TEST_SOURCES := $(wildcard $(TESTS_DIR)/memory/*.cpp)
 TEST_SOURCES += $(wildcard $(TESTS_DIR)/collections/*.cpp)
 TEST_OBJECTS := $(addprefix $(BUILD_DIR)/, $(addsuffix .cpp.o, $(basename $(notdir $(TEST_SOURCES)))))
@@ -30,22 +31,22 @@ $(BUILD_DIR)/test_suite: $(TEST_OBJECTS) $(MANAGER_OBJECTS) $(COMMON_OBJECTS)
 	$(CXX) $(CXXFLAGS) $^ -o $@
 
 $(BUILD_DIR)/%.cpp.o: $(TESTS_DIR)/memory/%.cpp
-	$(CXX) -c $(CXXFLAGS) $< -o $@
+	$(CXX) -c $(TEST_INCS) $(CXXFLAGS) $< -o $@
 
 $(BUILD_DIR)/%.cpp.o: $(TESTS_DIR)/collections/%.cpp
-	$(CXX) -c $(CXXFLAGS) $< -o $@
+	$(CXX) -c $(TEST_INCS) $(CXXFLAGS) $< -o $@
 
 $(BUILD_DIR)/%.cpp.o: ./%.cpp
-	$(CXX) -c $(CXXFLAGS) $< -o $@
+	$(CXX) -c $(TEST_INCS) $(CXXFLAGS) $< -o $@
 
 $(BUILD_DIR)/%.cpp.o: $(COMMON_DIR)/%.cpp
-	$(CXX) -c $(CXXFLAGS) $< -o $@
+	$(CXX) -c $(TEST_INCS) $(CXXFLAGS) $< -o $@
 
 $(BUILD_DIR)/%.cpp.o: $(COMMON_DIR)/memory/%.cpp
-	$(CXX) -c $(CXXFLAGS) $< -o $@
+	$(CXX) -c $(TEST_INCS) $(CXXFLAGS) $< -o $@
 
 $(BUILD_DIR)/%.cpp.o: $(COMMON_DIR)/collections/%.cpp
-	$(CXX) -c $(CXXFLAGS) $< -o $@
+	$(CXX) -c $(TEST_INCS) $(CXXFLAGS) $< -o $@
 
 clean:
 	rm -rf $(BUILD_DIR)
