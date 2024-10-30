@@ -1,0 +1,31 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Launch Client (Linux)",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/debug/client/client",
+            "args": ["-ip", "127.0.0.1", "-p", "9090", "--username", "wiktor", "--password", "123"],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "Launch Server (Linux)",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/debug/server/server",
+            "args": ["-p", "9090"],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "Launch Tests (Linux)",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/tests/build/test_suite",
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}
