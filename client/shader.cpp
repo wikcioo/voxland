@@ -109,7 +109,7 @@ void shader_bind(Shader *shader)
 
 void shader_unbind(Shader *shader)
 {
-    ASSERT(shader);
+    ASSERT(shader); UNUSED(shader);
     glUseProgram(0);
 }
 

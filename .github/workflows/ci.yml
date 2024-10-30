@@ -15,8 +15,10 @@ jobs:
       run: sudo apt-get update
     - name: Install dependencies
       run: sudo apt-get install -y g++ make libglfw3-dev libglew-dev libglm-dev libfreetype6-dev libsqlite3-dev
-    - name: Build project
-      run: make
+    - name: Build all (debug)
+      run: make all config=debug
+    - name: Build all (release)
+      run: make all config=release
     - name: Run tests
       run: |
         cd tests
