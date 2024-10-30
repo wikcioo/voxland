@@ -1,0 +1,24 @@
+name: C/C++ CI
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Update apt cache
+      run: sudo apt-get update
+    - name: Install dependencies
+      run: sudo apt-get install -y g++ make libglfw3-dev libglew-dev libglm-dev libfreetype6-dev libsqlite3-dev
+    - name: Build project
+      run: make
+    - name: Run tests
+      run: |
+        cd tests
+        make
+        ./build/test_suite
