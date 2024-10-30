@@ -19,6 +19,7 @@
 #include <glm/gtc/type_ptr.hpp>
 
 #include "game.h"
+#include "renderer2d.h"
 #include "common/log.h"
 #include "common/asserts.h"
 #include "common/defines.h"
@@ -32,6 +33,7 @@
 #define POLL_INFINITE_TIMEOUT -1
 
 LOCAL Game game = {};
+LOCAL Renderer2D *renderer2d = NULL;
 LOCAL i32 client_socket;
 LOCAL struct pollfd pfds[POLLFD_COUNT];
 LOCAL bool running = false;
@@ -111,6 +113,10 @@ LOCAL void glfw_framebuffer_size_callback(GLFWwindow *window, i32 width, i32 hei
     glViewport(0, 0, width, height);
     game.current_window_width = width;
     game.current_window_height = height;
+
+    f32 left = -(f32) width / 2.0f, right = (f32) width / 2.0f;
+    f32 bottom = -(f32) height / 2.0f, top = (f32) height / 2.0f;
+    game.ui_projection = glm::ortho(left, right, bottom, top);
 }
 
 LOCAL void glfw_key_callback(GLFWwindow *window, i32 key, i32 scancode, i32 action, i32 mods)
@@ -678,6 +684,13 @@ int main(int argc, char **argv)
         exit(EXIT_FAILURE);
     }
 
+    renderer2d = renderer2d_create();
+    game.renderer2d = renderer2d;
+
+    f32 left = -(f32) WINDOW_WIDTH / 2.0f, right = (f32) WINDOW_WIDTH / 2.0f;
+    f32 bottom = -(f32) WINDOW_HEIGHT / 2.0f, top = (f32) WINDOW_HEIGHT / 2.0f;
+    game.ui_projection = glm::ortho(left, right, bottom, top);
+
     game.self = (Player *) malloc(sizeof(Player));
     memset(game.self, 0, sizeof(Player));
     game.client_socket = client_socket;
@@ -727,6 +740,8 @@ int main(int argc, char **argv)
 
     glfwDestroyWindow(game.window);
     glfwTerminate();
+
+    renderer2d_destroy(renderer2d);
 
     pthread_kill(network_thread, SIGINT);
     pthread_join(network_thread, NULL);

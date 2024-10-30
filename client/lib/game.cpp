@@ -309,6 +309,19 @@ void game_update(Game *game, f32 dt)
         glDrawArrays(GL_TRIANGLES, 0, 36);
     }
 
+    renderer2d_begin_scene(game->renderer2d, &game->ui_projection);
+    renderer2d_draw_line(game->renderer2d, glm::vec2(-10.0f, 0.0f), glm::vec2(10.0f, 0.0f), glm::vec3(1.0f));
+    renderer2d_draw_line(game->renderer2d, glm::vec2(0.0f, -10.0f), glm::vec2(0.0f, 10.0f), glm::vec3(1.0f));
+    renderer2d_draw_text(game->renderer2d,
+                       "Voxland Client",
+                       FA16,
+                       glm::vec2(
+                           -(f32) game->current_window_width * 0.5f,
+                            (f32) game->current_window_height * 0.5f - (f32) renderer2d_get_font_bearing_y(game->renderer2d, FA16)
+                       ),
+                       glm::vec3(1.0f));
+    renderer2d_end_scene(game->renderer2d);
+
     glfwSwapBuffers(game->window);
     glfwPollEvents();
 }

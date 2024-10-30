@@ -4,6 +4,7 @@
 
 #include <glm/glm.hpp>
 
+#include "client/renderer2d.h"
 #include "common/defines.h"
 #include "common/player_types.h"
 #include "common/entity_types.h"
@@ -19,6 +20,7 @@ typedef struct {
     u32 current_window_height;
     bool is_polygon_mode;
     bool player_moved;
+    glm::mat4 ui_projection;
     glm::vec3 camera_position;
     glm::vec3 camera_direction;
     glm::vec3 camera_up;
@@ -34,6 +36,7 @@ typedef struct {
     i32 client_socket;
     f32 client_update_freq;
     f32 client_update_period;
+    Renderer2D *renderer2d;
 } Game;
 
 typedef void (*pfn_game_init)(Game *game);
