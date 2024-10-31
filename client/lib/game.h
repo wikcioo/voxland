@@ -28,8 +28,8 @@ typedef struct {
     f32 camera_pitch;
     f32 camera_yaw;
     u32 vao, vbo;
-    u32 flat_color_shader;
-    u32 lighting_shader;
+    Shader flat_color_shader;
+    Shader lighting_shader;
     Light light;
     Player *players; // uthash
     Player *self;

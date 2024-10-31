@@ -16,8 +16,13 @@ bool shader_create(const Shader_Create_Info *create_info, Shader *out_shader)
     ASSERT(create_info->vertex_filepath);
     ASSERT(create_info->fragment_filepath);
 
-    if (!filesystem_exists(create_info->vertex_filepath) ||
-        !filesystem_exists(create_info->fragment_filepath)) {
+    if (!filesystem_exists(create_info->vertex_filepath)) {
+        LOG_ERROR("vertex shader source at `%s` not found\n", create_info->vertex_filepath);
+        return false;
+    }
+
+    if (!filesystem_exists(create_info->fragment_filepath)) {
+        LOG_ERROR("fragment shader source at `%s` not found\n", create_info->vertex_filepath);
         return false;
     }
 
@@ -121,6 +126,16 @@ void shader_set_uniform_int(Shader *shader, const char *name, i32 data)
     i32 location = glGetUniformLocation(shader->program, name);
     ASSERT(location != -1);
     glUniform1i(location, data);
+}
+
+void shader_set_uniform_float(Shader *shader, const char *name, f32 data)
+{
+    ASSERT(shader);
+    ASSERT(name);
+
+    i32 location = glGetUniformLocation(shader->program, name);
+    ASSERT(location != -1);
+    glUniform1f(location, data);
 }
 
 void shader_set_uniform_int_array(Shader *shader, const char *name, const i32 *data, u32 length)

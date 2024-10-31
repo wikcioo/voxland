@@ -11,105 +11,7 @@
 #include "common/log.h"
 #include "common/packet.h"
 #include "common/clock.h"
-
-const char *vertex_shader_source =
-    "#version 330 core\n"
-    "layout(location = 0) in vec3 a_position;\n"
-    "layout(location = 1) in vec3 a_normal;\n"
-    "out vec3 vs_position;\n"
-    "out vec3 vs_normal;\n"
-    "uniform mat4 projection;\n"
-    "uniform mat4 view;\n"
-    "uniform mat4 model;\n"
-    "void main() {\n"
-    "    gl_Position = projection * view * model * vec4(a_position, 1.0);\n"
-    "    vs_position = vec3(model * vec4(a_position, 1.0));\n"
-    "    vs_normal = mat3(transpose(inverse(model))) * a_normal;\n"
-    "}\n";
-
-const char *fragment_shader_source =
-    "#version 330 core\n"
-    "out vec4 out_color;\n"
-    "uniform vec4 color;\n"
-    "void main() {\n"
-    "    out_color = color;\n"
-    "}\n";
-
-const char *fragment_shader_lighting_source =
-    "#version 330 core\n"
-    "out vec4 out_color;\n"
-    "in vec3 vs_position;\n"
-    "in vec3 vs_normal;\n"
-    "struct material {\n"
-    "    vec3 ambient;\n"
-    "    vec3 diffuse;\n"
-    "    vec3 specular;\n"
-    "    float shininess;\n"
-    "};\n"
-    "struct point_light {\n"
-    "    vec3 position;\n"
-    "    vec3 ambient;\n"
-    "    vec3 diffuse;\n"
-    "    vec3 specular;\n"
-    "};\n"
-    "uniform material mat;\n"
-    "uniform point_light light;\n"
-    "uniform vec3 camera_pos;\n"
-    "void main() {\n"
-    "    vec3 ambient = light.ambient * mat.ambient;\n"
-    "    vec3 normal = normalize(vs_normal);\n"
-    "    vec3 light_dir = normalize(light.position - vs_position);\n"
-    "    float diff = max(dot(normal, light_dir), 0.0);\n"
-    "    vec3 diffuse = light.diffuse * (diff * mat.diffuse);\n"
-    "    vec3 view_dir = normalize(camera_pos - vs_position);\n"
-    "    vec3 reflect_dir = reflect(-light_dir, normal);\n"
-    "    float spec = pow(max(dot(view_dir, reflect_dir), 0.0), mat.shininess);\n"
-    "    vec3 specular = light.specular * (spec * mat.specular);\n"
-    "    vec3 result = ambient + diffuse + specular;\n"
-    "    out_color = vec4(result, 1.0);\n"
-    "}\n";
-
-u32 create_shader(u32 type, const char *source)
-{
-    u32 shader = glCreateShader(type);
-    glShaderSource(shader, 1, (const GLchar **)&source, 0);
-    glCompileShader(shader);
-
-    i32 is_compiled;
-    glGetShaderiv(shader, GL_COMPILE_STATUS, &is_compiled);
-    if (is_compiled == false) {
-        char info_log[1024] = {0};
-        glGetShaderInfoLog(shader, 1024, 0, info_log);
-        const char *shader_type_as_cstr = type == GL_VERTEX_SHADER ? "vertex" : (type == GL_FRAGMENT_SHADER ? "fragment" : "unknown");
-        LOG_FATAL("failed to compile %s shader: %s\n", shader_type_as_cstr, info_log);
-        exit(EXIT_FAILURE);
-    }
-
-    return shader;
-}
-
-u32 create_program(u32 vertex_shader, u32 fragment_shader)
-{
-    u32 program = glCreateProgram();
-
-    glAttachShader(program, vertex_shader);
-    glAttachShader(program, fragment_shader);
-    glLinkProgram(program);
-
-    i32 is_linked;
-    glGetProgramiv(program, GL_LINK_STATUS, &is_linked);
-    if (is_linked == false) {
-        char info_log[1024];
-        glGetProgramInfoLog(program, 1024, 0, info_log);
-        LOG_FATAL("failed to link program: %s\n", info_log);
-        exit(EXIT_FAILURE);
-    }
-
-    glDeleteShader(vertex_shader);
-    glDeleteShader(fragment_shader);
-
-    return program;
-}
+#include "common/asserts.h"
 
 void process_input(Game *game, f32 dt)
 {
@@ -176,14 +78,25 @@ void game_init(Game *game)
     game->camera_yaw = -90.0f;
     game->vao = 0;
     game->vbo = 0;
-    game->flat_color_shader = 0;
-    game->lighting_shader = 0;
 
-    u32 vertex_shader = create_shader(GL_VERTEX_SHADER, vertex_shader_source);
-    u32 fragment_shader = create_shader(GL_FRAGMENT_SHADER, fragment_shader_source);
-    u32 fragment_shader_lighting = create_shader(GL_FRAGMENT_SHADER, fragment_shader_lighting_source);
-    game->flat_color_shader = create_program(vertex_shader, fragment_shader);
-    game->lighting_shader = create_program(vertex_shader, fragment_shader_lighting);
+    bool shader_create_result;
+    UNUSED(shader_create_result);
+
+    Shader_Create_Info flat_color_shader_create_info = {
+        .vertex_filepath = "assets/shaders/flat_color.vert",
+        .fragment_filepath = "assets/shaders/flat_color.frag"
+    };
+
+    shader_create_result = shader_create(&flat_color_shader_create_info, &game->flat_color_shader);
+    ASSERT(shader_create_result);
+
+    Shader_Create_Info lighting_shader_create_info = {
+        .vertex_filepath = "assets/shaders/lighting.vert",
+        .fragment_filepath = "assets/shaders/lighting.frag"
+    };
+
+    shader_create_result = shader_create(&lighting_shader_create_info, &game->lighting_shader);
+    ASSERT(shader_create_result);
 
     f32 vertices[] = {
         -0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
@@ -255,12 +168,13 @@ void game_update(Game *game, f32 dt)
     glm::mat4 projection = glm::perspective(glm::radians(game->camera_fov), (f32) game->current_window_width / (f32) game->current_window_height, 0.1f, 100.0f);
     glm::mat4 view = glm::lookAt(game->camera_position, game->camera_position + game->camera_direction, game->camera_up);
 
-    glUseProgram(game->lighting_shader);
-    glUniformMatrix4fv(glGetUniformLocation(game->lighting_shader, "projection"), 1, false, glm::value_ptr(projection));
-    glUniformMatrix4fv(glGetUniformLocation(game->lighting_shader, "view"), 1, false, glm::value_ptr(view));
-    glUniform3fv(glGetUniformLocation(game->lighting_shader, "camera_pos"), 1, glm::value_ptr(game->camera_position));
-    glUniform3f(glGetUniformLocation(game->lighting_shader, "mat.specular"), 0.5f, 0.5f, 0.5f);
-    glUniform1f(glGetUniformLocation(game->lighting_shader, "mat.shininess"), 32.0f);
+    shader_bind(&game->lighting_shader);
+    shader_set_uniform_mat4(&game->lighting_shader, "u_projection", &projection);
+    shader_set_uniform_mat4(&game->lighting_shader, "u_view", &view);
+    shader_set_uniform_vec3(&game->lighting_shader, "u_camera_pos", &game->camera_position);
+    glm::vec3 mat_specular = glm::vec3(0.5f);
+    shader_set_uniform_vec3(&game->lighting_shader, "u_material.specular", &mat_specular);
+    shader_set_uniform_float(&game->lighting_shader, "u_material.shininess", 32.0f);
 
     glm::vec3 current_light_position = {};
     if (game->light.id != 0) {
@@ -271,10 +185,10 @@ void game_update(Game *game, f32 dt)
             game->light.initial_position.z + glm::sin(game->light.angular_velocity * t) * game->light.radius
         );
 
-        glUniform3fv(glGetUniformLocation(game->lighting_shader, "light.position"), 1, glm::value_ptr(current_light_position));
-        glUniform3fv(glGetUniformLocation(game->lighting_shader, "light.ambient"), 1, glm::value_ptr(game->light.ambient));
-        glUniform3fv(glGetUniformLocation(game->lighting_shader, "light.diffuse"), 1, glm::value_ptr(game->light.diffuse));
-        glUniform3fv(glGetUniformLocation(game->lighting_shader, "light.specular"), 1, glm::value_ptr(game->light.specular));
+        shader_set_uniform_vec3(&game->lighting_shader, "u_light.position", &current_light_position);
+        shader_set_uniform_vec3(&game->lighting_shader, "u_light.ambient", &game->light.ambient);
+        shader_set_uniform_vec3(&game->lighting_shader, "u_light.diffuse", &game->light.diffuse);
+        shader_set_uniform_vec3(&game->lighting_shader, "u_light.specular", &game->light.specular);
     }
 
     glBindVertexArray(game->vao);
@@ -282,30 +196,30 @@ void game_update(Game *game, f32 dt)
     // Render players
     for (Player *player = game->players; player != NULL; player = (Player *) player->hh.next) {
         glm::mat4 model = glm::translate(glm::mat4(1.0f), player->position);
-        glUniformMatrix4fv(glGetUniformLocation(game->lighting_shader, "model"), 1, false, glm::value_ptr(model));
-        glUniform3fv(glGetUniformLocation(game->lighting_shader, "mat.ambient"), 1, glm::value_ptr(player->color));
-        glUniform3fv(glGetUniformLocation(game->lighting_shader, "mat.diffuse"), 1, glm::value_ptr(player->color));
+        shader_set_uniform_mat4(&game->lighting_shader, "u_model", &model);
+        shader_set_uniform_vec3(&game->lighting_shader, "u_material.ambient", &player->color);
+        shader_set_uniform_vec3(&game->lighting_shader, "u_material.diffuse", &player->color);
         glDrawArrays(GL_TRIANGLES, 0, 36);
     }
 
     {
         // Render ourselves
         glm::mat4 model = glm::translate(glm::mat4(1.0f), game->self->position);
-        glUniformMatrix4fv(glGetUniformLocation(game->lighting_shader, "model"), 1, false, glm::value_ptr(model));
-        glUniform3fv(glGetUniformLocation(game->lighting_shader, "mat.ambient"), 1, glm::value_ptr(game->self->color));
-        glUniform3fv(glGetUniformLocation(game->lighting_shader, "mat.diffuse"), 1, glm::value_ptr(game->self->color));
+        shader_set_uniform_mat4(&game->lighting_shader, "u_model", &model);
+        shader_set_uniform_vec3(&game->lighting_shader, "u_material.ambient", &game->self->color);
+        shader_set_uniform_vec3(&game->lighting_shader, "u_material.diffuse", &game->self->color);
         glDrawArrays(GL_TRIANGLES, 0, 36);
     }
 
     if (game->light.id != 0) {
-        glUseProgram(game->flat_color_shader);
+        shader_bind(&game->flat_color_shader);
 
         glm::mat4 light_model = glm::translate(glm::mat4(1.0f), current_light_position) * glm::scale(glm::mat4(1.0f), glm::vec3(0.25f));
-        glUniformMatrix4fv(glGetUniformLocation(game->flat_color_shader, "projection"), 1, false, glm::value_ptr(projection));
-        glUniformMatrix4fv(glGetUniformLocation(game->flat_color_shader, "view"), 1, false, glm::value_ptr(view));
-        glUniformMatrix4fv(glGetUniformLocation(game->flat_color_shader, "model"), 1, false, glm::value_ptr(light_model));
-        glUniform4f(glGetUniformLocation(game->flat_color_shader, "color"), 0.9f, 0.9f, 0.9f, 1.0f);
-
+        shader_set_uniform_mat4(&game->flat_color_shader, "u_projection", &projection);
+        shader_set_uniform_mat4(&game->flat_color_shader, "u_view", &view);
+        shader_set_uniform_mat4(&game->flat_color_shader, "u_model", &light_model);
+        glm::vec4 color = glm::vec4(0.9f, 0.9f, 0.9f, 1.0f);
+        shader_set_uniform_vec4(&game->flat_color_shader, "u_color", &color);
         glDrawArrays(GL_TRIANGLES, 0, 36);
     }
 
@@ -328,8 +242,8 @@ void game_update(Game *game, f32 dt)
 
 void game_shutdown(Game *game)
 {
-    glDeleteProgram(game->flat_color_shader);
-    glDeleteProgram(game->lighting_shader);
+    shader_destroy(&game->flat_color_shader);
+    shader_destroy(&game->lighting_shader);
     glDeleteVertexArrays(1, &game->vao);
     glDeleteBuffers(1, &game->vbo);
 }

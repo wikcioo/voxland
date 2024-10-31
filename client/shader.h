@@ -20,6 +20,7 @@ void shader_bind(Shader *shader);
 void shader_unbind(Shader *shader);
 
 void shader_set_uniform_int(Shader *shader, const char *name, i32 data);
+void shader_set_uniform_float(Shader *shader, const char *name, f32 data);
 void shader_set_uniform_int_array(Shader *shader, const char *name, const i32 *data, u32 length);
 void shader_set_uniform_vec2(Shader *shader, const char *name, const glm::vec2 *data);
 void shader_set_uniform_vec3(Shader *shader, const char *name, const glm::vec3 *data);
