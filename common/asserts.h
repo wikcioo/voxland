@@ -8,7 +8,7 @@
     #error "Only g++ compiler is supported!"
 #endif
 
-void report_assertion_failure(const char *expression, const char *message, const char *file, i32 line);
+void report_assertion_failure(const char *expression, const char *message, const char *file, i32 line, ...);
 
 #ifndef ENABLE_ASSERTIONS
     #define ENABLE_ASSERTIONS 1
@@ -23,14 +23,14 @@ void report_assertion_failure(const char *expression, const char *message, const
             }                                                           \
         }
 
-    #define ASSERT_MSG(expr, message)                                         \
-        {                                                                     \
-            if (!(expr)) {                                                    \
-                report_assertion_failure(#expr, message, __FILE__, __LINE__); \
-                DEBUG_BREAK();                                                \
-            }                                                                 \
+    #define ASSERT_MSG(expr, message, ...)                                                   \
+        {                                                                                    \
+            if (!(expr)) {                                                                   \
+                report_assertion_failure(#expr, message, __FILE__, __LINE__, ##__VA_ARGS__); \
+                DEBUG_BREAK();                                                               \
+            }                                                                                \
         }
 #else
     #define ASSERT(expr)
-    #define ASSERT_MSG(expr, message)
+    #define ASSERT_MSG(expr, message, ...)
 #endif

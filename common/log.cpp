@@ -32,22 +32,31 @@ void log_message(Log_Level level, const char *message, ...)
     va_end(args);
 }
 
-void report_assertion_failure(const char *expression, const char *message, const char *file, i32 line)
+void report_assertion_failure(const char *expression, const char *message, const char *file, i32 line, ...)
 {
     bool with_msg = message != NULL;
-    char formatted[256] = {};
-    snprintf(formatted, sizeof(formatted),
+
+    char formatted_message[256] = {};
+    if (with_msg) {
+        va_list args;
+        va_start(args, line);
+        vsnprintf(formatted_message, sizeof(formatted_message), message, args);
+        va_end(args);
+    }
+
+    char formatted_report[512] = {};
+    snprintf(formatted_report, sizeof(formatted_report),
              "assertion failure for expression `%s`%s%s%s in %s:%d\n",
              expression,
-             with_msg ? " with message `" : "",
-             with_msg ? message : "",
-             with_msg ? "`" : "",
+             with_msg ? " with message \"" : "",
+             with_msg ? formatted_message : "",
+             with_msg ? "\"" : "",
              file, line);
 
 #if ENABLE_FATAL_LOG
-    LOG_FATAL("%s", formatted);
+    LOG_FATAL("%s", formatted_report);
 #else
-    fprintf(stderr, "%s", formatted);
+    fprintf(stderr, "%s", formatted_report);
 #endif
 }
 

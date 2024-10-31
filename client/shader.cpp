@@ -124,7 +124,7 @@ void shader_set_uniform_int(Shader *shader, const char *name, i32 data)
     ASSERT(name);
 
     i32 location = glGetUniformLocation(shader->program, name);
-    ASSERT(location != -1);
+    ASSERT_MSG(location != -1, "failed to find uniform `%s` inside shader program `%u`", name, shader->program);
     glUniform1i(location, data);
 }
 
@@ -134,7 +134,7 @@ void shader_set_uniform_float(Shader *shader, const char *name, f32 data)
     ASSERT(name);
 
     i32 location = glGetUniformLocation(shader->program, name);
-    ASSERT(location != -1);
+    ASSERT_MSG(location != -1, "failed to find uniform `%s` inside shader program `%u`", name, shader->program);
     glUniform1f(location, data);
 }
 
@@ -146,7 +146,7 @@ void shader_set_uniform_int_array(Shader *shader, const char *name, const i32 *d
     ASSERT(length > 0);
 
     i32 location = glGetUniformLocation(shader->program, name);
-    ASSERT(location != -1);
+    ASSERT_MSG(location != -1, "failed to find uniform `%s` inside shader program `%u`", name, shader->program);
     glUniform1iv(location, length, data);
 }
 
@@ -157,7 +157,7 @@ void shader_set_uniform_vec2(Shader *shader, const char *name, const glm::vec2 *
     ASSERT(data);
 
     i32 location = glGetUniformLocation(shader->program, name);
-    ASSERT(location != -1);
+    ASSERT_MSG(location != -1, "failed to find uniform `%s` inside shader program `%u`", name, shader->program);
     glUniform2fv(location, 1, (f32 *) data);
 }
 
@@ -168,7 +168,7 @@ void shader_set_uniform_vec3(Shader *shader, const char *name, const glm::vec3 *
     ASSERT(data);
 
     i32 location = glGetUniformLocation(shader->program, name);
-    ASSERT(location != -1);
+    ASSERT_MSG(location != -1, "failed to find uniform `%s` inside shader program `%u`", name, shader->program);
     glUniform3fv(location, 1, (f32 *) data);
 }
 
@@ -179,7 +179,7 @@ void shader_set_uniform_vec4(Shader *shader, const char *name, const glm::vec4 *
     ASSERT(data);
 
     i32 location = glGetUniformLocation(shader->program, name);
-    ASSERT(location != -1);
+    ASSERT_MSG(location != -1, "failed to find uniform `%s` inside shader program `%u`", name, shader->program);
     glUniform4fv(location, 1, (f32 *) data);
 }
 
@@ -190,6 +190,6 @@ void shader_set_uniform_mat4(Shader *shader, const char *name, const glm::mat4 *
     ASSERT(data);
 
     i32 location = glGetUniformLocation(shader->program, name);
-    ASSERT(location != -1);
+    ASSERT_MSG(location != -1, "failed to find uniform `%s` inside shader program `%u`", name, shader->program);
     glUniformMatrix4fv(location, 1, false, (f32 *) data);
 }
