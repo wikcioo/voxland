@@ -10,9 +10,10 @@
 #include "input_codes.h"
 #include "common/log.h"
 #include "common/asserts.h"
+#include "common/collections/darray.h"
 
-#define CONSOLE_PROMPT_LEN 2
-#define CONSOLE_PROMPT "> "
+#define CONSOLE_PROMPT_LEN 7
+#define CONSOLE_PROMPT "input> "
 #define CONSOLE_MAX_INPUT_SIZE 256
 #define CONSOLE_ARGV_CAPACITY 32
 
@@ -25,11 +26,13 @@ typedef enum {
 
 typedef struct {
     Console_State state;
+    bool is_changing_state;
     f32 target_height;
     f32 current_height;
     u32 cursor;
     char input[CONSOLE_MAX_INPUT_SIZE+1];
     Font_Atlas_Size font_size;
+    char **logs; // darray
 } Console;
 
 LOCAL Console console = {};
@@ -41,10 +44,20 @@ LOCAL bool console_exec_from_input(void);
 void console_init(void)
 {
     console.font_size = FA16;
+    console.logs = (char **) darray_create(sizeof(char *));
+}
+
+void console_shutdown(void)
+{
+    darray_destroy(console.logs);
 }
 
 void console_update(Renderer2D *renderer2d, const glm::mat4 *ui_projection, u32 ww, u32 wh, f32 dt)
 {
+    if (console.state == CONSOLE_HIDDEN && !console.is_changing_state) {
+        return;
+    }
+
     if (console.current_height != console.target_height) {
         PERSIST f32 speed = 15.0;
         PERSIST f32 epsilon = 0.1f;
@@ -53,6 +66,7 @@ void console_update(Renderer2D *renderer2d, const glm::mat4 *ui_projection, u32 
         if ((dir > 0.0f && console.current_height >= console.target_height - epsilon) ||
             (dir < 0.0f && console.current_height <= console.target_height + epsilon)) {
             console.current_height = console.target_height;
+            console.is_changing_state = false;
         }
     }
 
@@ -70,12 +84,12 @@ void console_update(Renderer2D *renderer2d, const glm::mat4 *ui_projection, u32 
 
     glm::vec2 input_box_size = glm::vec2(
         console_size.x,
-        font_height + 10.0f
+        1.25f * font_height
     );
 
     glm::vec2 input_box_position = glm::vec2(
         0.0f,
-        console_position.y - console_size.y * 0.5f + input_box_size.y * 0.5f
+        glm::round(console_position.y - console_size.y * 0.5f + input_box_size.y * 0.5f)
     );
 
     glm::vec2 input_text_position = glm::vec2(
@@ -96,6 +110,21 @@ void console_update(Renderer2D *renderer2d, const glm::mat4 *ui_projection, u32 
     snprintf(text_buffer, sizeof(text_buffer), "%.*s%.*s", CONSOLE_PROMPT_LEN, CONSOLE_PROMPT, console.cursor, console.input);
     renderer2d_draw_text(renderer2d, text_buffer, console.font_size, input_text_position, glm::vec3(0.9f));
 
+    u64 num_logs = darray_length(console.logs);
+    for (i64 i = num_logs - 1, j = 0; i >= 0; i--, j++) {
+        glm::vec2 log_text_position = glm::vec2(
+            input_box_position.x - input_box_size.x * 0.5f + 5.0f,
+            glm::round(input_box_position.y + input_box_size.y * 0.5f + ((f32) j * font_height) + 5.0f)
+        );
+
+        if (log_text_position.y >= (f32) wh * 0.5f) {
+            // No more space to render more logs.
+            break;
+        }
+
+        renderer2d_draw_text(renderer2d, console.logs[i], console.font_size, log_text_position, glm::vec3(0.9f));
+    }
+
     renderer2d_end_scene(renderer2d);
 }
 
@@ -108,9 +137,11 @@ bool console_on_key_pressed_event(Event_Code code, Event_Data data)
         if (console.state == CONSOLE_HALF_OPEN) {
             console.state = CONSOLE_HIDDEN;
             console.target_height = 0.0f;
+            console.is_changing_state = true;
         } else {
             console.state = CONSOLE_HALF_OPEN;
             console.target_height = 300.0f;
+            console.is_changing_state = true;
         }
 
         return true;
@@ -118,9 +149,11 @@ bool console_on_key_pressed_event(Event_Code code, Event_Data data)
         if (console.state == CONSOLE_FULL_OPEN) {
             console.state = CONSOLE_HIDDEN;
             console.target_height = 0.0f;
+            console.is_changing_state = true;
         } else {
             console.state = CONSOLE_FULL_OPEN;
             console.target_height = 600.0f;
+            console.is_changing_state = true;
         }
 
         return true;
@@ -128,7 +161,7 @@ bool console_on_key_pressed_event(Event_Code code, Event_Data data)
         if (console.state != CONSOLE_HIDDEN) {
             if (key == KEYCODE_Backspace) {
                 if (console.cursor > 0) {
-                    console.cursor -= 1;
+                    console.input[--console.cursor] = '\0';
                 }
                 return true;
             } else if (key >= KEYCODE_Space && key <= KEYCODE_Z) {
@@ -149,7 +182,7 @@ bool console_on_key_repeated_event(Event_Code code, Event_Data data)
     u16 key = data.U16[0];
     if (key == KEYCODE_Backspace && console.state != CONSOLE_HIDDEN) {
         if (console.cursor > 0) {
-            console.cursor -= 1;
+            console.input[--console.cursor] = '\0';
         }
 
         return true;
@@ -173,6 +206,14 @@ bool console_on_char_pressed_event(Event_Code code, Event_Data data)
     console.input[console.cursor++] = (char) data.U32[0];
 
     return true;
+}
+
+bool console_on_app_log_event(Event_Code code, Event_Data data)
+{
+    UNUSED(code); UNUSED(data);
+    u64 num_logs = darray_length(log_registry.logs);
+    darray_push(console.logs, log_registry.logs[num_logs-1].content);
+    return false;
 }
 
 LOCAL char *shift(u32 *argc, char ***argv)

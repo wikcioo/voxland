@@ -3,19 +3,25 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <time.h>
+#include <string.h>
 
 #include "defines.h"
+#include "event.h"
+#include "collections/darray.h"
+
+Log_Registry log_registry;
 
 LOCAL const char *levels_str[]   = { "TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL" };
 LOCAL const char *levels_color[] = {  "1;37",  "1;34", "1;32", "1;33",  "1;31",  "1;41" };
 
-void get_current_time_as_cstr(char *buf, u32 buf_len)
+time_t get_current_time_as_cstr(char *buf, u32 buf_len)
 {
     time_t raw;
     struct tm *local_time;
     time(&raw);
     local_time = localtime(&raw);
     strftime(buf, buf_len, "%H:%M:%S", local_time);
+    return raw;
 }
 
 void log_message(Log_Level level, const char *message, ...)
@@ -23,13 +29,33 @@ void log_message(Log_Level level, const char *message, ...)
     FILE *stream = level > LOG_LEVEL_WARN ? stderr : stdout;
 
     char current_time[16] = {0};
-    get_current_time_as_cstr(current_time, 16);
+    time_t timestamp = get_current_time_as_cstr(current_time, 16);
 
     va_list args;
     va_start(args, message);
-    fprintf(stream, "[%s] \033[%sm[%-5s]\033[0m ", current_time, levels_color[level], levels_str[level]);
-    vfprintf(stream, message, args);
+    char formatted_message_buffer[512] = {};
+    vsnprintf(formatted_message_buffer, sizeof(formatted_message_buffer), message, args);
     va_end(args);
+
+    char full_message_buffer[1024] = {};
+    i32 bytes_written = snprintf(full_message_buffer, sizeof(full_message_buffer), "[%s] \033[%sm[%-5s]\033[0m ", current_time, levels_color[level], levels_str[level]);
+    snprintf(full_message_buffer + bytes_written, sizeof(full_message_buffer) - bytes_written, "%s", formatted_message_buffer);
+
+    // Write to stdout/stderr
+    fprintf(stream, "%s", full_message_buffer);
+
+    // Append new log entry to the global log registry and generate event
+    char *log_message = (char *) arena_allocator_allocate(&log_registry.allocator, strlen(formatted_message_buffer)+1);
+    memcpy(log_message, formatted_message_buffer, strlen(formatted_message_buffer));
+
+    Log_Entry log = {
+        .timestamp = timestamp,
+        .level = level,
+        .content = log_message
+    };
+
+    darray_push(log_registry.logs, log);
+    event_system_fire(EVENT_CODE_APP_LOG, {0});
 }
 
 void report_assertion_failure(const char *expression, const char *message, const char *file, i32 line, ...)

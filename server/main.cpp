@@ -23,8 +23,10 @@
 #include "common/defines.h"
 #include "common/hexdump.h"
 #include "common/packet.h"
+#include "common/event.h"
 #include "common/player_types.h"
 #include "common/entity_types.h"
+#include "common/collections/darray.h"
 #include "uthash/uthash.h"
 
 #define SERVER_BACKLOG 10
@@ -752,6 +754,12 @@ void *processing_loop(void *args)
     return NULL;
 }
 
+LOCAL bool server_on_app_log_event(Event_Code code, Event_Data data)
+{
+    UNUSED(code); UNUSED(data);
+    return false;
+}
+
 LOCAL char *shift(int *argc, char ***argv)
 {
     ASSERT(*argc > 0);
@@ -768,6 +776,16 @@ LOCAL void usage(FILE *stream, const char *const program)
 
 int main(int argc, char **argv)
 {
+    if (!event_system_init()) {
+        LOG_FATAL("failed to initialize event system\n");
+        exit(EXIT_FAILURE);
+    }
+
+    event_system_register(EVENT_CODE_APP_LOG, server_on_app_log_event);
+
+    arena_allocator_create(MiB(1), 0, &log_registry.allocator);
+    log_registry.logs = (Log_Entry *) darray_create(sizeof(Log_Entry));
+
     const char *const program = shift(&argc, &argv);
     const char *port_as_cstr = NULL;
     const char *database_filepath = NULL;
@@ -985,6 +1003,12 @@ int main(int argc, char **argv)
     }
 
     pthread_mutex_destroy(&moved_players_lock);
+
+    event_system_unregister(EVENT_CODE_APP_LOG, server_on_app_log_event);
+    event_system_shutdown();
+
+    arena_allocator_destroy(&log_registry.allocator);
+    darray_destroy(log_registry.logs);
 
     if (close(server_socket) == -1) {
         LOG_ERROR("error while closing the socket: %s\n", strerror(errno));

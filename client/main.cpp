@@ -29,6 +29,7 @@
 #include "common/hexdump.h"
 #include "common/packet.h"
 #include "common/clock.h"
+#include "common/collections/darray.h"
 
 #define POLLFD_COUNT 1
 #define INPUT_BUFFER_SIZE 1024
@@ -607,6 +608,18 @@ LOCAL void usage(FILE *stream, const char *const program)
 
 int main(int argc, char **argv)
 {
+    if (!event_system_init()) {
+        LOG_FATAL("failed to initialize event system\n");
+        exit(EXIT_FAILURE);
+    }
+
+    event_system_register(EVENT_CODE_APP_LOG, console_on_app_log_event);
+
+    arena_allocator_create(MiB(1), 0, &log_registry.allocator);
+    log_registry.logs = (Log_Entry *) darray_create(sizeof(Log_Entry));
+
+    console_init();
+
     const char *const program = shift(&argc, &argv);
     const char *server_ip_address = NULL;
     const char *server_port = NULL;
@@ -756,11 +769,6 @@ int main(int argc, char **argv)
         exit(EXIT_FAILURE);
     }
 
-    if (!event_system_init()) {
-        LOG_FATAL("failed to initialize event system\n");
-        exit(EXIT_FAILURE);
-    }
-
     event_system_register(EVENT_CODE_KEY_PRESSED, console_on_key_pressed_event);
     event_system_register(EVENT_CODE_KEY_REPEATED, console_on_key_repeated_event);
     event_system_register(EVENT_CODE_CHAR_PRESSED, console_on_char_pressed_event);
@@ -794,8 +802,6 @@ int main(int argc, char **argv)
         LOG_FATAL("failed to send player join request packet\n");
         exit(EXIT_FAILURE);
     }
-
-    console_init();
 
     f32 delta_time = 0.0f;
     f32 last_time = 0.0f;
@@ -844,7 +850,13 @@ int main(int argc, char **argv)
     event_system_unregister(EVENT_CODE_KEY_RELEASED, game_on_key_released_event);
     event_system_unregister(EVENT_CODE_CHAR_PRESSED, game_on_char_pressed_event);
     event_system_unregister(EVENT_CODE_KEY_PRESSED, client_on_key_pressed_event);
+    event_system_unregister(EVENT_CODE_APP_LOG, console_on_app_log_event);
     event_system_shutdown();
+
+    arena_allocator_destroy(&log_registry.allocator);
+    darray_destroy(log_registry.logs);
+
+    console_shutdown();
 
     pthread_kill(network_thread, SIGINT);
     pthread_join(network_thread, NULL);

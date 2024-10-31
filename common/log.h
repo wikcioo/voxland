@@ -1,5 +1,9 @@
 #pragma once
 
+#include <time.h>
+
+#include "memory/arena_allocator.h"
+
 #ifndef ENABLE_LOGGING
     #define ENABLE_LOGGING 1
 #endif
@@ -48,6 +52,19 @@ typedef enum {
     LOG_LEVEL_ERROR,
     LOG_LEVEL_FATAL
 } Log_Level;
+
+typedef struct {
+    time_t timestamp;
+    Log_Level level;
+    const char *content;
+} Log_Entry;
+
+typedef struct {
+    Arena_Allocator allocator;
+    Log_Entry *logs; // darray
+} Log_Registry;
+
+extern Log_Registry log_registry;
 
 void log_message(Log_Level level, const char *message, ...);
 

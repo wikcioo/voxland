@@ -42,6 +42,8 @@ typedef enum {
 
     EVENT_CODE_WINDOW_MAXIMIZED,
 
+    EVENT_CODE_APP_LOG,
+
     NUM_OF_EVENT_CODES
 } Event_Code;
 
