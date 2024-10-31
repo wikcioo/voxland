@@ -592,6 +592,30 @@ LOCAL bool game_on_char_pressed_event(Event_Code code, Event_Data data)
     return false;
 }
 
+LOCAL void display_fps_info(f32 dt)
+{
+    PERSIST Font_Atlas_Size fps_info_font_size = FA16;
+    PERSIST f32 font_width = (f32) renderer2d_get_font_width(renderer2d, fps_info_font_size);
+    PERSIST f32 font_height = (f32) renderer2d_get_font_height(renderer2d, fps_info_font_size);
+    PERSIST f32 fps_info_update_period = 0.5f;
+    PERSIST f32 fps_info_update_accumulator = 0.3f;
+    PERSIST char fps_info[32] = {};
+
+    fps_info_update_accumulator += dt;
+    if (fps_info_update_accumulator >= fps_info_update_period) {
+        snprintf(fps_info, sizeof(fps_info), "%d FPS", (i32) (1.0f / dt));
+        fps_info_update_accumulator = 0.0f;
+    }
+
+    renderer2d_begin_scene(renderer2d, &game.ui_projection);
+    glm::vec2 fps_info_position = glm::vec2(
+        (f32) game.current_window_width * 0.5f - (f32) strlen(fps_info) * font_width,
+        (f32) game.current_window_height * 0.5f - font_height
+    );
+    renderer2d_draw_text(renderer2d, fps_info, fps_info_font_size, fps_info_position, glm::vec3(0.9f));
+    renderer2d_end_scene(renderer2d);
+}
+
 LOCAL char *shift(int *argc, char ***argv)
 {
     ASSERT(*argc > 0);
@@ -815,6 +839,8 @@ int main(int argc, char **argv)
 
         game_update(&game, delta_time);
         console_update(renderer2d, &game.ui_projection, game.current_window_width, game.current_window_height, delta_time);
+
+        display_fps_info(delta_time);
 
         glfwSwapBuffers(game.window);
         glfwPollEvents();
