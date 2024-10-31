@@ -5,6 +5,7 @@
 #include <glm/glm.hpp>
 
 #include "client/renderer2d.h"
+#include "client/input_codes.h"
 #include "common/defines.h"
 #include "common/player_types.h"
 #include "common/entity_types.h"
@@ -37,6 +38,7 @@ typedef struct {
     f32 client_update_freq;
     f32 client_update_period;
     Renderer2D *renderer2d;
+    bool keys_state[KEYCODE_Last];
 } Game;
 
 typedef void (*pfn_game_init)(Game *game);

@@ -15,6 +15,9 @@ typedef enum {
     // u16 key = data.U16[0];
     EVENT_CODE_KEY_REPEATED,
 
+    // u32 character = data.u32[0]
+    EVENT_CODE_CHAR_PRESSED,
+
     // u16 btn = data.U8[0];
     EVENT_CODE_MOUSE_BUTTON_PRESSED,
 

@@ -19,7 +19,10 @@
 #include <glm/gtc/type_ptr.hpp>
 
 #include "game.h"
+#include "client.h"
+#include "console.h"
 #include "renderer2d.h"
+#include "input_codes.h"
 #include "common/log.h"
 #include "common/asserts.h"
 #include "common/defines.h"
@@ -119,35 +122,29 @@ LOCAL void glfw_framebuffer_size_callback(GLFWwindow *window, i32 width, i32 hei
     game.ui_projection = glm::ortho(left, right, bottom, top);
 }
 
+LOCAL void glfw_char_callback(GLFWwindow *window, u32 codepoint)
+{
+    UNUSED(window);
+
+    Event_Data data = {};
+    data.U32[0] = codepoint;
+    event_system_fire(EVENT_CODE_CHAR_PRESSED, data);
+}
+
 LOCAL void glfw_key_callback(GLFWwindow *window, i32 key, i32 scancode, i32 action, i32 mods)
 {
     UNUSED(window);
     UNUSED(scancode);
     UNUSED(mods);
 
-    if (key == GLFW_KEY_P && action == GLFW_PRESS) {
-        if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) {
-            ping_server();
-        } else {
-            game.is_polygon_mode = !game.is_polygon_mode;
-            i32 mode = game.is_polygon_mode ? GL_LINE : GL_FILL;
-            glPolygonMode(GL_FRONT_AND_BACK, mode);
-        }
-    } else if (key == GLFW_KEY_R && action == GLFW_PRESS) {
-        if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) {
-            if (!reload_libgame()) {
-                LOG_FATAL("failed to reload libgame\n");
-                exit(EXIT_FAILURE);
-            }
-            LOG_INFO("successfully reloaded libgame\n");
-        }
-    } else if (key == GLFW_KEY_M && action == GLFW_PRESS) {
-        send_text_message_to_server("hello server!");
-    } else if (key == GLFW_KEY_F1 && action == GLFW_PRESS) {
-        // Intentionally crash the client.
-        i32 a = 1, b = 0;
-        i32 c = a / b;
-        UNUSED(c);
+    Event_Data data = {};
+    data.U16[0] = (u16) key;
+    if (action == INPUTACTION_Press) {
+        event_system_fire(EVENT_CODE_KEY_PRESSED, data);
+    } else if (action == INPUTACTION_Release) {
+        event_system_fire(EVENT_CODE_KEY_RELEASED, data);
+    } else if (action == INPUTACTION_Repeat) {
+        event_system_fire(EVENT_CODE_KEY_REPEATED, data);
     }
 }
 
@@ -155,7 +152,7 @@ LOCAL void glfw_mouse_moved_callback(GLFWwindow *window, f64 xpos, f64 ypos)
 {
     PERSIST bool first_mouse_move = true;
 
-    if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) != GLFW_PRESS) {
+    if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) != INPUTACTION_Press) {
         first_mouse_move = true;
         return;
     }
@@ -520,6 +517,80 @@ LOCAL bool connect_to_server(const char *ip_addr, const char *port)
     return true;
 }
 
+LOCAL bool client_on_key_pressed_event(Event_Code code, Event_Data data)
+{
+    UNUSED(code);
+
+    u16 key = data.U16[0];
+
+    if (key == KEYCODE_P) {
+        if (glfwGetKey(game.window, KEYCODE_LeftControl) == INPUTACTION_Press) {
+            ping_server();
+        } else {
+            game.is_polygon_mode = !game.is_polygon_mode;
+            i32 mode = game.is_polygon_mode ? GL_LINE : GL_FILL;
+            glPolygonMode(GL_FRONT_AND_BACK, mode);
+        }
+        return true;
+    } else if (key == KEYCODE_R) {
+        if (glfwGetKey(game.window, KEYCODE_LeftControl) == INPUTACTION_Press) {
+            if (!reload_libgame()) {
+                LOG_FATAL("failed to reload libgame\n");
+                exit(EXIT_FAILURE);
+            }
+            LOG_INFO("successfully reloaded libgame\n");
+            return true;
+        }
+    } else if (key == KEYCODE_M) {
+        send_text_message_to_server("hello server!");
+        return true;
+    } else if (key == KEYCODE_F4) {
+        if (glfwGetKey(game.window, KEYCODE_LeftControl) == INPUTACTION_Press && glfwGetKey(game.window, KEYCODE_LeftShift) == INPUTACTION_Press) {
+            // Intentionally crash the client.
+            i32 a = 1, b = 0;
+            i32 c = a / b;
+            UNUSED(c);
+            return true;
+        }
+    }
+
+    return false;
+}
+
+LOCAL bool game_on_key_pressed_event(Event_Code code, Event_Data data)
+{
+    UNUSED(code);
+
+    u16 key = data.U16[0];
+    if (key == KEYCODE_W || key == KEYCODE_A || key == KEYCODE_S || key == KEYCODE_D ||
+        key == KEYCODE_Up || key == KEYCODE_Left || key == KEYCODE_Down || key == KEYCODE_Right) {
+        game.keys_state[data.U16[0]] = true;
+        return true;
+    }
+
+    return false;
+}
+
+LOCAL bool game_on_key_released_event(Event_Code code, Event_Data data)
+{
+    UNUSED(code);
+
+    u16 key = data.U16[0];
+    if (key == KEYCODE_W || key == KEYCODE_A || key == KEYCODE_S || key == KEYCODE_D ||
+        key == KEYCODE_Up || key == KEYCODE_Left || key == KEYCODE_Down || key == KEYCODE_Right) {
+        game.keys_state[data.U16[0]] = false;
+        return true;
+    }
+
+    return false;
+}
+
+LOCAL bool game_on_char_pressed_event(Event_Code code, Event_Data data)
+{
+    UNUSED(code); UNUSED(data);
+    return false;
+}
+
 LOCAL char *shift(int *argc, char ***argv)
 {
     ASSERT(*argc > 0);
@@ -651,6 +722,7 @@ int main(int argc, char **argv)
     glfwMakeContextCurrent(game.window);
     glfwSetFramebufferSizeCallback(game.window, glfw_framebuffer_size_callback);
     glfwSetKeyCallback(game.window, glfw_key_callback);
+    glfwSetCharCallback(game.window, glfw_char_callback);
     glfwSetCursorPosCallback(game.window, glfw_mouse_moved_callback);
 
     glfwSwapInterval(0);
@@ -684,6 +756,19 @@ int main(int argc, char **argv)
         exit(EXIT_FAILURE);
     }
 
+    if (!event_system_init()) {
+        LOG_FATAL("failed to initialize event system\n");
+        exit(EXIT_FAILURE);
+    }
+
+    event_system_register(EVENT_CODE_KEY_PRESSED, console_on_key_pressed_event);
+    event_system_register(EVENT_CODE_KEY_REPEATED, console_on_key_repeated_event);
+    event_system_register(EVENT_CODE_CHAR_PRESSED, console_on_char_pressed_event);
+    event_system_register(EVENT_CODE_KEY_PRESSED, game_on_key_pressed_event);
+    event_system_register(EVENT_CODE_KEY_RELEASED, game_on_key_released_event);
+    event_system_register(EVENT_CODE_CHAR_PRESSED, game_on_char_pressed_event);
+    event_system_register(EVENT_CODE_KEY_PRESSED, client_on_key_pressed_event);
+
     renderer2d = renderer2d_create();
     game.renderer2d = renderer2d;
 
@@ -710,6 +795,8 @@ int main(int argc, char **argv)
         exit(EXIT_FAILURE);
     }
 
+    console_init();
+
     f32 delta_time = 0.0f;
     f32 last_time = 0.0f;
     while (!glfwWindowShouldClose(game.window) && running) {
@@ -717,7 +804,14 @@ int main(int argc, char **argv)
         delta_time = now - last_time;
         last_time = now;
 
+        glClearColor(0.192f, 0.192f, 0.5f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
         game_update(&game, delta_time);
+        console_update(renderer2d, &game.ui_projection, game.current_window_width, game.current_window_height, delta_time);
+
+        glfwSwapBuffers(game.window);
+        glfwPollEvents();
     }
 
     game_shutdown(&game);
@@ -742,6 +836,15 @@ int main(int argc, char **argv)
     glfwTerminate();
 
     renderer2d_destroy(renderer2d);
+
+    event_system_unregister(EVENT_CODE_KEY_PRESSED, console_on_key_pressed_event);
+    event_system_unregister(EVENT_CODE_KEY_REPEATED, console_on_key_repeated_event);
+    event_system_unregister(EVENT_CODE_CHAR_PRESSED, console_on_char_pressed_event);
+    event_system_unregister(EVENT_CODE_KEY_PRESSED, game_on_key_pressed_event);
+    event_system_unregister(EVENT_CODE_KEY_RELEASED, game_on_key_released_event);
+    event_system_unregister(EVENT_CODE_CHAR_PRESSED, game_on_char_pressed_event);
+    event_system_unregister(EVENT_CODE_KEY_PRESSED, client_on_key_pressed_event);
+    event_system_shutdown();
 
     pthread_kill(network_thread, SIGINT);
     pthread_join(network_thread, NULL);

@@ -20,26 +20,26 @@ void process_input(Game *game, f32 dt)
 
     glm::vec3 camera_right = glm::normalize(glm::cross(game->camera_direction, game->camera_up));
 
-    if (glfwGetKey(game->window, GLFW_KEY_W) == GLFW_PRESS) {
+    if (game->keys_state[KEYCODE_W]) {
         game->camera_position += game->camera_direction * speed;
-    } else if (glfwGetKey(game->window, GLFW_KEY_S) == GLFW_PRESS) {
+    } else if (game->keys_state[KEYCODE_S]) {
         game->camera_position -= game->camera_direction * speed;
-    } else if (glfwGetKey(game->window, GLFW_KEY_A) == GLFW_PRESS) {
+    } else if (game->keys_state[KEYCODE_A]) {
         game->camera_position -= camera_right * speed;
-    } else if (glfwGetKey(game->window, GLFW_KEY_D) == GLFW_PRESS) {
+    } else if (game->keys_state[KEYCODE_D]) {
         game->camera_position += camera_right * speed;
     }
 
-    if (glfwGetKey(game->window, GLFW_KEY_UP) == GLFW_PRESS) {
+    if (game->keys_state[KEYCODE_Up]) {
         game->self->position.z -= speed;
         game->player_moved = true;
-    } else if (glfwGetKey(game->window, GLFW_KEY_DOWN) == GLFW_PRESS) {
+    } else if (game->keys_state[KEYCODE_Down]) {
         game->self->position.z += speed;
         game->player_moved = true;
-    } else if (glfwGetKey(game->window, GLFW_KEY_LEFT) == GLFW_PRESS) {
+    } else if (game->keys_state[KEYCODE_Left]) {
         game->self->position.x -= speed;
         game->player_moved = true;
-    } else if (glfwGetKey(game->window, GLFW_KEY_RIGHT) == GLFW_PRESS) {
+    } else if (game->keys_state[KEYCODE_Right]) {
         game->self->position.x += speed;
         game->player_moved = true;
     }
@@ -160,9 +160,6 @@ void game_init(Game *game)
 
 void game_update(Game *game, f32 dt)
 {
-    glClearColor(0.192f, 0.192f, 0.5f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
     process_input(game, dt);
 
     glm::mat4 projection = glm::perspective(glm::radians(game->camera_fov), (f32) game->current_window_width / (f32) game->current_window_height, 0.1f, 100.0f);
@@ -235,9 +232,6 @@ void game_update(Game *game, f32 dt)
                        ),
                        glm::vec3(1.0f));
     renderer2d_end_scene(game->renderer2d);
-
-    glfwSwapBuffers(game->window);
-    glfwPollEvents();
 }
 
 void game_shutdown(Game *game)
