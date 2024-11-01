@@ -10,12 +10,20 @@
 #include "input_codes.h"
 #include "common/log.h"
 #include "common/asserts.h"
+#include "common/string_view.h"
 #include "common/collections/darray.h"
 
 #define CONSOLE_PROMPT_LEN 7
 #define CONSOLE_PROMPT "input> "
 #define CONSOLE_MAX_INPUT_SIZE 256
 #define CONSOLE_ARGV_CAPACITY 32
+
+#define CONSOLE_MAX_WIDTH 1000.0f
+#define CONSOLE_PAD_X 10.0f
+#define CONSOLE_LOG_PAD_X 5.0f
+#define CONSOLE_LOG_PAD_Y 5.0f
+#define CONSOLE_INPUT_PAD_X 5.0f
+#define CONSOLE_INPUT_PAD_Y_RATIO_TO_FONT 1.25f
 
 typedef enum {
     CONSOLE_HIDDEN,
@@ -36,6 +44,9 @@ typedef struct {
 } Console;
 
 LOCAL Console console = {};
+LOCAL glm::vec3 console_input_bg_color = glm::vec3(0.075f, 0.39f, 0.37f);
+LOCAL glm::vec3 console_text_color = glm::vec3(0.9f);
+LOCAL glm::vec3 console_bg_color = glm::vec3(0.17f, 0.035f, 0.2f);
 
 LOCAL char *shift(u32 *argc, char ***argv);
 LOCAL bool console_exec_from_argv(u32 argc, char **argv);
@@ -70,10 +81,11 @@ void console_update(Renderer2D *renderer2d, const glm::mat4 *ui_projection, u32 
         }
     }
 
+    f32 font_width = (f32) renderer2d_get_font_width(renderer2d, console.font_size);
     f32 font_height = (f32) renderer2d_get_font_height(renderer2d, console.font_size);
 
     glm::vec2 console_size = glm::vec2(
-        glm::min(1000.0f, (f32) ww - 20.0f),
+        glm::min(CONSOLE_MAX_WIDTH, (f32) ww - CONSOLE_PAD_X * 2.0f),
         console.current_height
     );
 
@@ -84,7 +96,7 @@ void console_update(Renderer2D *renderer2d, const glm::mat4 *ui_projection, u32 
 
     glm::vec2 input_box_size = glm::vec2(
         console_size.x,
-        1.25f * font_height
+        CONSOLE_INPUT_PAD_Y_RATIO_TO_FONT * font_height
     );
 
     glm::vec2 input_box_position = glm::vec2(
@@ -93,7 +105,7 @@ void console_update(Renderer2D *renderer2d, const glm::mat4 *ui_projection, u32 
     );
 
     glm::vec2 input_text_position = glm::vec2(
-        input_box_position.x - input_box_size.x * 0.5f + 5.0f,
+        input_box_position.x - input_box_size.x * 0.5f + CONSOLE_INPUT_PAD_X,
         input_box_position.y - ((f32) renderer2d_get_font_bearing_y(renderer2d, console.font_size) * 0.5f)
     );
 
@@ -103,26 +115,64 @@ void console_update(Renderer2D *renderer2d, const glm::mat4 *ui_projection, u32 
 
     renderer2d_begin_scene(renderer2d, ui_projection);
 
-    renderer2d_draw_quad(renderer2d, console_position, console_size, glm::vec3(0.17f, 0.035f, 0.2f));
-    renderer2d_draw_quad(renderer2d, input_box_position, input_box_size, glm::vec3(0.075f, 0.39f, 0.37f));
+    renderer2d_draw_quad(renderer2d, console_position, console_size, console_bg_color);
+    renderer2d_draw_quad(renderer2d, input_box_position, input_box_size, console_input_bg_color);
 
     char text_buffer[CONSOLE_PROMPT_LEN + CONSOLE_MAX_INPUT_SIZE + 1] = {};
     snprintf(text_buffer, sizeof(text_buffer), "%.*s%.*s", CONSOLE_PROMPT_LEN, CONSOLE_PROMPT, console.cursor, console.input);
-    renderer2d_draw_text(renderer2d, text_buffer, console.font_size, input_text_position, glm::vec3(0.9f));
+    renderer2d_draw_text(renderer2d, text_buffer, console.font_size, input_text_position, console_text_color);
 
     u64 num_logs = darray_length(console.logs);
     for (i64 i = num_logs - 1, j = 0; i >= 0; i--, j++) {
-        glm::vec2 log_text_position = glm::vec2(
-            input_box_position.x - input_box_size.x * 0.5f + 5.0f,
-            glm::round(input_box_position.y + input_box_size.y * 0.5f + ((f32) j * font_height) + 5.0f)
-        );
-
-        if (log_text_position.y >= (f32) wh * 0.5f) {
-            // No more space to render more logs.
+        char *log = console.logs[i];
+        u32 max_chars_per_line = (u32) ((console_size.x - CONSOLE_LOG_PAD_X * 2.0f) / font_width);
+        if (max_chars_per_line == 0) {
             break;
         }
+        u32 log_num_chars = (u32) strlen(log);
+        if (log[log_num_chars-1] == '\n') {
+            log_num_chars--;
+        }
+        if (log_num_chars > max_chars_per_line) {
+            // Handle multi-line logs.
+            String_View log_sv = sv_from_cstr(log);
+            u32 log_total_num_lines = log_num_chars / max_chars_per_line;
 
-        renderer2d_draw_text(renderer2d, console.logs[i], console.font_size, log_text_position, glm::vec3(0.9f));
+            for (i32 k = log_total_num_lines; k >= 0; k--) {
+                String_View log_sv_copy = log_sv;
+                log_sv_copy.count = log_num_chars >= max_chars_per_line ? max_chars_per_line : log_num_chars;
+                log_num_chars -= max_chars_per_line;
+
+                glm::vec2 log_text_position = glm::vec2(
+                    input_box_position.x - input_box_size.x * 0.5f + CONSOLE_LOG_PAD_X,
+                    glm::round(input_box_position.y + input_box_size.y * 0.5f + ((f32) (j+k) * font_height) + CONSOLE_LOG_PAD_Y)
+                );
+
+                if (log_text_position.y >= (f32) wh * 0.5f) {
+                    // No more space to render more logs. Continue to the next line.
+                    log_sv.data += log_sv_copy.count;
+                    continue;
+                }
+
+                renderer2d_draw_text(renderer2d, log_sv_copy, console.font_size, log_text_position, console_text_color);
+                log_sv.data += log_sv_copy.count;
+            }
+
+            j += log_total_num_lines;
+        } else {
+            // Handle single-line logs.
+            glm::vec2 log_text_position = glm::vec2(
+                input_box_position.x - input_box_size.x * 0.5f + CONSOLE_LOG_PAD_X,
+                glm::round(input_box_position.y + input_box_size.y * 0.5f + ((f32) j * font_height) + CONSOLE_LOG_PAD_Y)
+            );
+
+            if (log_text_position.y >= (f32) wh * 0.5f) {
+                // No more space to render more logs.
+                break;
+            }
+
+            renderer2d_draw_text(renderer2d, console.logs[i], console.font_size, log_text_position, console_text_color);
+        }
     }
 
     renderer2d_end_scene(renderer2d);
