@@ -356,21 +356,27 @@ void renderer2d_set_line_width(Renderer2D *renderer2d, f32 width)
 void renderer2d_draw_text(Renderer2D *renderer2d, const char *text, Font_Atlas_Size fa_size, glm::vec2 position, glm::vec3 color, f32 alpha)
 {
     ASSERT(text);
+    renderer2d_draw_text(renderer2d, sv_from_cstr(text), fa_size, position, color, alpha);
+}
+
+void renderer2d_draw_text(Renderer2D *renderer2d, String_View sv, Font_Atlas_Size fa_size, glm::vec2 position, glm::vec3 color, f32 alpha)
+{
     ASSERT(fa_size < FA_COUNT);
 
     f32 start_x = position.x;
 
     PERSIST f32 scale = 1.0f;
     Font_Atlas *fa = &renderer2d->font_atlases[fa_size];
-    for (const char *c = text; *c; c++) {
-        Glyph_Data g = fa->glyphs[(i32)*c];
+    for (u32 i = 0; i < sv.count; i++) {
+        char c = sv.data[i];
+        Glyph_Data g = fa->glyphs[(i32)c];
 
-        if (*c == ' ') {
+        if (c == ' ') {
             position.x += g.advance.x * scale;
-        } else if (*c == '\n') {
+        } else if (c == '\n') {
             position.x = start_x;
             position.y -= (f32) fa->height * scale;
-        } else if (*c == '\t') {
+        } else if (c == '\t') {
             // Tab is 4 spaces
             position.x += 4 * fa->glyphs[32].advance.x * scale;
         } else {
@@ -394,8 +400,8 @@ void renderer2d_draw_text(Renderer2D *renderer2d, const char *text, Font_Atlas_S
                 glm::vec4(x+w, -y, ox+sx / (f32) fa->width, 0)
             };
 
-            for (i32 i = 0; i < QUAD_VERTEX_COUNT; i++) {
-                renderer2d->text_vertex_buffer_ptr->tex_coords = text_vertex_positions[i];
+            for (i32 j = 0; j < QUAD_VERTEX_COUNT; j++) {
+                renderer2d->text_vertex_buffer_ptr->tex_coords = text_vertex_positions[j];
                 renderer2d->text_vertex_buffer_ptr->color = glm::vec4(color, alpha),
                 renderer2d->text_vertex_buffer_ptr->tex_index = (f32) fa_size;
                 renderer2d->text_vertex_buffer_ptr++;

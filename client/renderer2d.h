@@ -5,6 +5,7 @@
 #include "shader.h"
 #include "texture.h"
 #include "common/defines.h"
+#include "common/string_view.h"
 
 #define RENDERER_MAX_QUAD_COUNT     10000
 #define RENDERER_MAX_VERTEX_COUNT   (RENDERER_MAX_QUAD_COUNT * 4)
@@ -136,6 +137,7 @@ void renderer2d_draw_line(Renderer2D *renderer2d, glm::vec2 p1, glm::vec2 p2, gl
 void renderer2d_set_line_width(Renderer2D *renderer2d, f32 width);
 
 void renderer2d_draw_text(Renderer2D *renderer2d, const char *text, Font_Atlas_Size fa_size, glm::vec2 position, glm::vec3 color, f32 alpha = 1.0f);
+void renderer2d_draw_text(Renderer2D *renderer2d, String_View sv, Font_Atlas_Size fa_size, glm::vec2 position, glm::vec3 color, f32 alpha = 1.0f);
 
 u32 renderer2d_get_font_bearing_y(Renderer2D *renderer2d, Font_Atlas_Size fa);
 u32 renderer2d_get_font_height(Renderer2D *renderer2d, Font_Atlas_Size fa);
