@@ -25,6 +25,8 @@
 #define CONSOLE_INPUT_PAD_X 5.0f
 #define CONSOLE_INPUT_PAD_Y_RATIO_TO_FONT 1.25f
 
+#define CONSOLE_CURSOR_BLINK_PERIOD 0.5f
+
 typedef enum {
     CONSOLE_HIDDEN,
     CONSOLE_HALF_OPEN,
@@ -38,6 +40,8 @@ typedef struct {
     f32 target_height;
     f32 current_height;
     u32 cursor;
+    bool cursor_visible;
+    f32 cursor_blink_accumulator;
     char input[CONSOLE_MAX_INPUT_SIZE+1];
     Font_Atlas_Size font_size;
     char **logs; // darray
@@ -45,6 +49,7 @@ typedef struct {
 
 LOCAL Console console = {};
 LOCAL glm::vec3 console_input_bg_color = glm::vec3(0.075f, 0.39f, 0.37f);
+LOCAL glm::vec3 console_cursor_color = glm::vec3(0.35f, 0.65f, 0.26f);
 LOCAL glm::vec3 console_text_color = glm::vec3(0.9f);
 LOCAL glm::vec3 console_bg_color = glm::vec3(0.17f, 0.035f, 0.2f);
 
@@ -118,10 +123,30 @@ void console_update(Renderer2D *renderer2d, const glm::mat4 *ui_projection, u32 
     renderer2d_draw_quad(renderer2d, console_position, console_size, console_bg_color);
     renderer2d_draw_quad(renderer2d, input_box_position, input_box_size, console_input_bg_color);
 
+    // Input
     char text_buffer[CONSOLE_PROMPT_LEN + CONSOLE_MAX_INPUT_SIZE + 1] = {};
     snprintf(text_buffer, sizeof(text_buffer), "%.*s%.*s", CONSOLE_PROMPT_LEN, CONSOLE_PROMPT, console.cursor, console.input);
     renderer2d_draw_text(renderer2d, text_buffer, console.font_size, input_text_position, console_text_color);
 
+    // Cursor
+    glm::vec2 cursor_position = glm::vec2(
+        input_text_position.x + (f32) (CONSOLE_PROMPT_LEN + console.cursor) * font_width + font_width * 0.5f,
+        input_box_position.y
+    );
+
+    glm::vec2 cursor_size = glm::vec2(font_width, font_height);
+
+    console.cursor_blink_accumulator += dt;
+    if (console.cursor_blink_accumulator >= CONSOLE_CURSOR_BLINK_PERIOD) {
+        console.cursor_visible = !console.cursor_visible;
+        console.cursor_blink_accumulator = 0.0f;
+    }
+
+    if (console.cursor_visible) {
+        renderer2d_draw_quad(renderer2d, cursor_position, cursor_size, console_cursor_color);
+    }
+
+    // Logs
     u64 num_logs = darray_length(console.logs);
     for (i64 i = num_logs - 1, j = 0; i >= 0; i--, j++) {
         char *log = console.logs[i];
@@ -192,6 +217,8 @@ bool console_on_key_pressed_event(Event_Code code, Event_Data data)
             console.state = CONSOLE_HALF_OPEN;
             console.target_height = 300.0f;
             console.is_changing_state = true;
+            console.cursor_blink_accumulator = -0.5f; // Make cursor be visible a little longer when opening console
+            console.cursor_visible = true;
         }
 
         return true;
@@ -204,6 +231,8 @@ bool console_on_key_pressed_event(Event_Code code, Event_Data data)
             console.state = CONSOLE_FULL_OPEN;
             console.target_height = 600.0f;
             console.is_changing_state = true;
+            console.cursor_blink_accumulator = -0.5f; // Make cursor be visible a little longer when opening console
+            console.cursor_visible = true;
         }
 
         return true;
@@ -212,6 +241,8 @@ bool console_on_key_pressed_event(Event_Code code, Event_Data data)
             if (key == KEYCODE_Backspace) {
                 if (console.cursor > 0) {
                     console.input[--console.cursor] = '\0';
+                    console.cursor_blink_accumulator = 0.0f;
+                    console.cursor_visible = true;
                 }
                 return true;
             } else if (key >= KEYCODE_Space && key <= KEYCODE_Z) {
@@ -233,6 +264,8 @@ bool console_on_key_repeated_event(Event_Code code, Event_Data data)
     if (key == KEYCODE_Backspace && console.state != CONSOLE_HIDDEN) {
         if (console.cursor > 0) {
             console.input[--console.cursor] = '\0';
+            console.cursor_blink_accumulator = 0.0f;
+            console.cursor_visible = true;
         }
 
         return true;
@@ -254,6 +287,8 @@ bool console_on_char_pressed_event(Event_Code code, Event_Data data)
     }
 
     console.input[console.cursor++] = (char) data.U32[0];
+    console.cursor_blink_accumulator = 0.0f;
+    console.cursor_visible = true;
 
     return true;
 }
