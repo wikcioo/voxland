@@ -16,6 +16,11 @@
 struct GLFWwindow;
 
 typedef struct {
+    glm::mat4 model;
+    glm::vec3 color;
+} Voxel_Data;
+
+typedef struct {
     GLFWwindow *window;
     u32 current_window_width;
     u32 current_window_height;
@@ -28,9 +33,11 @@ typedef struct {
     f32 camera_fov;
     f32 camera_pitch;
     f32 camera_yaw;
-    u32 vao, vbo;
+    u32 vao, vbo, inst_vbo;
+    Voxel_Data *voxel_data;
     Shader flat_color_shader;
     Shader lighting_shader;
+    Shader voxel_shader;
     Light light;
     Player *players; // uthash
     Player *self;

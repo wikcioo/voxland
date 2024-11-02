@@ -98,6 +98,14 @@ void game_init(Game *game)
     shader_create_result = shader_create(&lighting_shader_create_info, &game->lighting_shader);
     ASSERT(shader_create_result);
 
+    Shader_Create_Info voxel_shader_create_info = {
+        .vertex_filepath = "assets/shaders/voxel.vert",
+        .fragment_filepath = "assets/shaders/voxel.frag"
+    };
+
+    shader_create_result = shader_create(&voxel_shader_create_info, &game->voxel_shader);
+    ASSERT(shader_create_result);
+
     f32 vertices[] = {
         -0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
          0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
@@ -155,6 +163,44 @@ void game_init(Game *game)
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(f32), (const void *) (3 * sizeof(f32)));
     glEnableVertexAttribArray(1);
 
+    const i32 num_instances = 100 * 100;
+
+    game->voxel_data = (Voxel_Data *) malloc(num_instances * sizeof(Voxel_Data));
+    ASSERT_MSG(game->voxel_data != NULL, "failed to allocate memory for voxel models");
+
+    u32 count = 0;
+    for (i32 z = -50; z < 50; z++) {
+        for (i32 x = -50; x < 50; x++) {
+            Voxel_Data data = {
+                .model = glm::translate(glm::mat4(1.0f), glm::vec3(1.2f * (f32) x, -1.0f, 1.2f * (f32) z)),
+                .color = glm::vec3(0.6f, 0.6f, 0.2f)
+            };
+
+            game->voxel_data[count] = data;
+            count++;
+        }
+    }
+
+    glGenBuffers(1, &game->inst_vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, game->inst_vbo);
+    glBufferData(GL_ARRAY_BUFFER, num_instances * sizeof(Voxel_Data), game->voxel_data, GL_STATIC_DRAW);
+
+    // model instance attributes
+    i32 vec4_size = (i32) sizeof(glm::vec4);
+    for (i32 i = 0; i < 4; i++) {
+        glVertexAttribPointer(2 + i, 4, GL_FLOAT, GL_FALSE, sizeof(Voxel_Data), (const void *) (i * (u64)vec4_size));
+        glEnableVertexAttribArray(2 + i);
+        glVertexAttribDivisor(2 + i, 1);
+    }
+
+    // color instance attributes
+    glVertexAttribPointer(6, 3, GL_FLOAT, GL_FALSE, sizeof(Voxel_Data), (const void *) (4 * (u64)vec4_size));
+    glEnableVertexAttribArray(6);
+    glVertexAttribDivisor(6, 1);
+
+    glBindVertexArray(0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+
     glEnable(GL_DEPTH_TEST);
 }
 
@@ -182,13 +228,29 @@ void game_update(Game *game, f32 dt)
             game->light.initial_position.z + glm::sin(game->light.angular_velocity * t) * game->light.radius
         );
 
+        shader_bind(&game->lighting_shader);
         shader_set_uniform_vec3(&game->lighting_shader, "u_light.position", &current_light_position);
         shader_set_uniform_vec3(&game->lighting_shader, "u_light.ambient", &game->light.ambient);
         shader_set_uniform_vec3(&game->lighting_shader, "u_light.diffuse", &game->light.diffuse);
         shader_set_uniform_vec3(&game->lighting_shader, "u_light.specular", &game->light.specular);
+
+        shader_bind(&game->voxel_shader);
+        shader_set_uniform_vec3(&game->voxel_shader, "u_light.position", &current_light_position);
+        shader_set_uniform_vec3(&game->voxel_shader, "u_light.ambient", &game->light.ambient);
+        shader_set_uniform_vec3(&game->voxel_shader, "u_light.diffuse", &game->light.diffuse);
+        shader_set_uniform_vec3(&game->voxel_shader, "u_light.specular", &game->light.specular);
     }
 
     glBindVertexArray(game->vao);
+
+    // Render voxels
+    shader_bind(&game->voxel_shader);
+    shader_set_uniform_mat4(&game->voxel_shader, "u_projection", &projection);
+    shader_set_uniform_mat4(&game->voxel_shader, "u_view", &view);
+    shader_set_uniform_vec3(&game->voxel_shader, "u_camera_pos", &game->camera_position);
+    glDrawArraysInstanced(GL_TRIANGLES, 0, 36, 100 * 100);
+
+    shader_bind(&game->lighting_shader);
 
     // Render players
     for (Player *player = game->players; player != NULL; player = (Player *) player->hh.next) {
@@ -238,8 +300,11 @@ void game_shutdown(Game *game)
 {
     shader_destroy(&game->flat_color_shader);
     shader_destroy(&game->lighting_shader);
+    shader_destroy(&game->voxel_shader);
     glDeleteVertexArrays(1, &game->vao);
     glDeleteBuffers(1, &game->vbo);
+    glDeleteBuffers(1, &game->inst_vbo);
+    free(game->voxel_data);
 }
 
 } // extern "C"
