@@ -320,6 +320,26 @@ LOCAL bool console_exec_from_argv(u32 argc, char **argv)
                 LOG_ERROR("failed to reload libgame\n");
                 return false;
             }
+        } else if (strcmp(flag, "vsync") == 0) {
+            if (argc == 0) {
+                LOG_ERROR("usage: vsync <state>\n");
+                LOG_ERROR("missing argument\n");
+                return false;
+            }
+
+            const char *state = shift(&argc, &argv);
+            if (strcmp(state, "on") == 0) {
+                glfwSwapInterval(1);
+                LOG_INFO("turned on vsync\n");
+                return true;
+            } else if (strcmp(state, "off") == 0) {
+                glfwSwapInterval(0);
+                LOG_INFO("turned off vsync\n");
+                return true;
+            } else {
+                LOG_ERROR("unknown vsync argument `%s`\n", state);
+                return false;
+            }
         } else {
             LOG_ERROR("unknown flag: `%s`\n", flag);
             return false;
