@@ -23,6 +23,7 @@
 #include "window.h"
 #include "console.h"
 #include "renderer2d.h"
+#include "input.h"
 #include "input_codes.h"
 #include "common/log.h"
 #include "common/asserts.h"
@@ -440,7 +441,7 @@ LOCAL bool client_on_key_pressed_event(Event_Code code, Event_Data data)
     u16 key = data.U16[0];
 
     if (key == KEYCODE_P) {
-        if (glfwGetKey(game.window, KEYCODE_LeftControl) == INPUTACTION_Press) {
+        if (input_is_key_pressed(KEYCODE_LeftControl)) {
             ping_server();
         } else {
             game.is_polygon_mode = !game.is_polygon_mode;
@@ -449,7 +450,7 @@ LOCAL bool client_on_key_pressed_event(Event_Code code, Event_Data data)
         }
         return true;
     } else if (key == KEYCODE_R) {
-        if (glfwGetKey(game.window, KEYCODE_LeftControl) == INPUTACTION_Press) {
+        if (input_is_key_pressed(KEYCODE_LeftControl)) {
             if (!reload_libgame()) {
                 LOG_FATAL("failed to reload libgame\n");
                 exit(EXIT_FAILURE);
@@ -461,7 +462,7 @@ LOCAL bool client_on_key_pressed_event(Event_Code code, Event_Data data)
         send_text_message_to_server("hello server!");
         return true;
     } else if (key == KEYCODE_F4) {
-        if (glfwGetKey(game.window, KEYCODE_LeftControl) == INPUTACTION_Press && glfwGetKey(game.window, KEYCODE_LeftShift) == INPUTACTION_Press) {
+        if (input_is_key_pressed(KEYCODE_LeftControl) && input_is_key_pressed(KEYCODE_LeftShift)) {
             // Intentionally crash the client.
             i32 a = 1, b = 0;
             i32 c = a / b;
@@ -482,7 +483,7 @@ LOCAL bool client_on_mouse_moved_event(Event_Code code, Event_Data data)
 
     PERSIST bool first_mouse_move = true;
 
-    if (glfwGetMouseButton(game.window, GLFW_MOUSE_BUTTON_LEFT) != INPUTACTION_Press) {
+    if (!input_is_mouse_button_pressed(MOUSEBUTTON_LEFT)) {
         first_mouse_move = true;
         return false;
     }
