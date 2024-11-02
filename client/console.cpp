@@ -2,11 +2,13 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <ctype.h>
 
 #include <glm/glm.hpp>
 #include <GLFW/glfw3.h>
 
 #include "client.h"
+#include "input.h"
 #include "input_codes.h"
 #include "common/log.h"
 #include "common/asserts.h"
@@ -56,6 +58,7 @@ LOCAL glm::vec3 console_bg_color = glm::vec3(0.17f, 0.035f, 0.2f);
 LOCAL char *shift(u32 *argc, char ***argv);
 LOCAL bool console_exec_from_argv(u32 argc, char **argv);
 LOCAL bool console_exec_from_input(void);
+LOCAL void console_handle_backspace();
 
 void console_init(void)
 {
@@ -239,11 +242,7 @@ bool console_on_key_pressed_event(Event_Code code, Event_Data data)
     } else {
         if (console.state != CONSOLE_HIDDEN) {
             if (key == KEYCODE_Backspace) {
-                if (console.cursor > 0) {
-                    console.input[--console.cursor] = '\0';
-                    console.cursor_blink_accumulator = 0.0f;
-                    console.cursor_visible = true;
-                }
+                console_handle_backspace();
                 return true;
             } else if (key >= KEYCODE_Space && key <= KEYCODE_Z) {
                 return true;
@@ -262,12 +261,7 @@ bool console_on_key_repeated_event(Event_Code code, Event_Data data)
 
     u16 key = data.U16[0];
     if (key == KEYCODE_Backspace && console.state != CONSOLE_HIDDEN) {
-        if (console.cursor > 0) {
-            console.input[--console.cursor] = '\0';
-            console.cursor_blink_accumulator = 0.0f;
-            console.cursor_visible = true;
-        }
-
+        console_handle_backspace();
         return true;
     }
 
@@ -350,4 +344,38 @@ LOCAL bool console_exec_from_input(void)
     memset(console.input, 0, sizeof(console.input));
 
     return result;
+}
+
+LOCAL void console_handle_backspace()
+{
+    if (console.cursor <= 0) {
+        return;
+    }
+
+    char c;
+
+    if (!input_is_key_pressed(KEYCODE_LeftControl)) {
+        console.input[--console.cursor] = '\0';
+        goto _end;
+    }
+
+    while (console.cursor > 0 && isspace(console.input[console.cursor-1])) {
+        console.input[--console.cursor] = '\0';
+    }
+
+    if (console.cursor <= 0) {
+        return;
+    }
+
+    c = console.input[console.cursor-1];
+    console.input[--console.cursor] = '\0';
+    if (isalnum(c)) {
+        while (console.cursor > 0 && isalnum(console.input[console.cursor-1])) {
+            console.input[--console.cursor] = '\0';
+        }
+    }
+
+_end:
+    console.cursor_blink_accumulator = 0.0f;
+    console.cursor_visible = true;
 }
