@@ -37,6 +37,11 @@ typedef enum {
 } Console_State;
 
 typedef struct {
+    u32 length;
+    char input[CONSOLE_MAX_INPUT_SIZE+1];
+} Console_Cmd;
+
+typedef struct {
     Console_State state;
     bool is_changing_state;
     f32 target_height;
@@ -45,6 +50,8 @@ typedef struct {
     bool cursor_visible;
     f32 cursor_blink_accumulator;
     char input[CONSOLE_MAX_INPUT_SIZE+1];
+    i32 history_cursor;
+    Console_Cmd *history; // darray
     Font_Atlas_Size font_size;
     char **logs; // darray
 } Console;
@@ -59,15 +66,19 @@ LOCAL char *shift(u32 *argc, char ***argv);
 LOCAL bool console_exec_from_argv(u32 argc, char **argv);
 LOCAL bool console_exec_from_input(void);
 LOCAL void console_handle_backspace();
+LOCAL bool console_process_key(u16 key);
 
 void console_init(void)
 {
     console.font_size = FA16;
+    console.history_cursor = -1;
+    console.history = (Console_Cmd *) darray_create(sizeof(Console_Cmd));
     console.logs = (char **) darray_create(sizeof(char *));
 }
 
 void console_shutdown(void)
 {
+    darray_destroy(console.history);
     darray_destroy(console.logs);
 }
 
@@ -240,15 +251,8 @@ bool console_on_key_pressed_event(Event_Code code, Event_Data data)
 
         return true;
     } else {
-        if (console.state != CONSOLE_HIDDEN) {
-            if (key == KEYCODE_Backspace) {
-                console_handle_backspace();
-                return true;
-            } else if (key >= KEYCODE_Space && key <= KEYCODE_Z) {
-                return true;
-            } else if (key == KEYCODE_Enter) {
-                console_exec_from_input();
-            }
+        if (console_process_key(key)) {
+            return true;
         }
     }
 
@@ -260,8 +264,7 @@ bool console_on_key_repeated_event(Event_Code code, Event_Data data)
     UNUSED(code);
 
     u16 key = data.U16[0];
-    if (key == KEYCODE_Backspace && console.state != CONSOLE_HIDDEN) {
-        console_handle_backspace();
+    if (console_process_key(key)) {
         return true;
     }
 
@@ -328,6 +331,11 @@ LOCAL bool console_exec_from_argv(u32 argc, char **argv)
 
 LOCAL bool console_exec_from_input(void)
 {
+    Console_Cmd cmd = {};
+    cmd.length = console.cursor;
+    memcpy(cmd.input, console.input, console.cursor);
+    darray_push(console.history, cmd);
+
     u32 argc = 0;
     char *argv[CONSOLE_ARGV_CAPACITY] = {};
 
@@ -378,4 +386,52 @@ LOCAL void console_handle_backspace()
 _end:
     console.cursor_blink_accumulator = 0.0f;
     console.cursor_visible = true;
+}
+
+LOCAL bool console_process_key(u16 key)
+{
+    if (console.state == CONSOLE_HIDDEN) {
+        return false;
+    }
+
+    if (key == KEYCODE_Backspace) {
+        console_handle_backspace();
+        return true;
+    } else if (key == KEYCODE_Enter) {
+        console.history_cursor = -1;
+        console_exec_from_input();
+        return true;
+    } else if (key == KEYCODE_Up || (key == KEYCODE_P && input_is_key_pressed(KEYCODE_LeftControl))) {
+        u64 len = darray_length(console.history);
+        if (console.history_cursor < (i32) len - 1) {
+            console.history_cursor += 1;
+            Console_Cmd cmd = console.history[len - console.history_cursor - 1];
+            memcpy(console.input, cmd.input, cmd.length);
+            console.cursor = cmd.length;
+            console.input[console.cursor] = '\0';
+        }
+        return true;
+    } else if (key == KEYCODE_Down || (key == KEYCODE_N && input_is_key_pressed(KEYCODE_LeftControl))) {
+        u64 len = darray_length(console.history);
+        if (console.history_cursor > 0) {
+            console.history_cursor -= 1;
+            Console_Cmd cmd = console.history[len - console.history_cursor - 1];
+            memcpy(console.input, cmd.input, cmd.length);
+            console.cursor = cmd.length;
+            console.input[console.cursor] = '\0';
+        } else if (console.history_cursor == 0) {
+            console.history_cursor -= 1;
+            memset(console.input, 0, sizeof(console.input));
+            console.cursor = 0;
+        }
+        return true;
+    } else if (key == KEYCODE_C && input_is_key_pressed(KEYCODE_LeftControl)) {
+        console.history_cursor = -1;
+        memset(console.input, 0, sizeof(console.input));
+        console.cursor = 0;
+    } else if (key >= KEYCODE_Space && key <= KEYCODE_Z) {
+        return true;
+    }
+
+    return false;
 }
