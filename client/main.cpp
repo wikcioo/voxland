@@ -20,6 +20,7 @@
 
 #include "game.h"
 #include "client.h"
+#include "window.h"
 #include "console.h"
 #include "renderer2d.h"
 #include "input_codes.h"
@@ -103,92 +104,6 @@ LOCAL void send_text_message_to_server(const char *message)
     if (!packet_send(client_socket, PACKET_TYPE_TXT_MSG, &packet)) {
         LOG_ERROR("failed to send text message packet\n");
     }
-}
-
-LOCAL void glfw_error_callback(i32 code, const char *description)
-{
-    UNUSED(code); UNUSED(description);
-    LOG_ERROR("glfw error (%d): %s\n", code, description);
-}
-
-LOCAL void glfw_framebuffer_size_callback(GLFWwindow *window, i32 width, i32 height)
-{
-    UNUSED(window);
-    glViewport(0, 0, width, height);
-    game.current_window_width = width;
-    game.current_window_height = height;
-
-    f32 left = -(f32) width / 2.0f, right = (f32) width / 2.0f;
-    f32 bottom = -(f32) height / 2.0f, top = (f32) height / 2.0f;
-    game.ui_projection = glm::ortho(left, right, bottom, top);
-}
-
-LOCAL void glfw_char_callback(GLFWwindow *window, u32 codepoint)
-{
-    UNUSED(window);
-
-    Event_Data data = {};
-    data.U32[0] = codepoint;
-    event_system_fire(EVENT_CODE_CHAR_PRESSED, data);
-}
-
-LOCAL void glfw_key_callback(GLFWwindow *window, i32 key, i32 scancode, i32 action, i32 mods)
-{
-    UNUSED(window);
-    UNUSED(scancode);
-    UNUSED(mods);
-
-    Event_Data data = {};
-    data.U16[0] = (u16) key;
-    if (action == INPUTACTION_Press) {
-        event_system_fire(EVENT_CODE_KEY_PRESSED, data);
-    } else if (action == INPUTACTION_Release) {
-        event_system_fire(EVENT_CODE_KEY_RELEASED, data);
-    } else if (action == INPUTACTION_Repeat) {
-        event_system_fire(EVENT_CODE_KEY_REPEATED, data);
-    }
-}
-
-LOCAL void glfw_mouse_moved_callback(GLFWwindow *window, f64 xpos, f64 ypos)
-{
-    PERSIST bool first_mouse_move = true;
-
-    if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) != INPUTACTION_Press) {
-        first_mouse_move = true;
-        return;
-    }
-
-    PERSIST f32 last_x, last_y;
-
-    if (first_mouse_move) {
-        last_x = (f32) xpos;
-        last_y = (f32) ypos;
-        first_mouse_move = false;
-    }
-
-    f32 xoffset = (f32) xpos - last_x;
-    f32 yoffset = last_y - (f32) ypos;
-    last_x = (f32) xpos;
-    last_y = (f32) ypos;
-
-    PERSIST f32 sensitivity = 0.1f;
-    xoffset *= sensitivity;
-    yoffset *= sensitivity;
-
-    game.camera_yaw += xoffset;
-    game.camera_pitch += yoffset;
-
-    if (game.camera_pitch > 89.0f) {
-        game.camera_pitch = 89.0f;
-    } else if (game.camera_pitch < -89.0f) {
-        game.camera_pitch = -89.0f;
-    }
-
-    glm::vec3 direction;
-    direction.x = glm::cos(glm::radians(game.camera_yaw)) * glm::cos(glm::radians(game.camera_pitch));
-    direction.y = glm::sin(glm::radians(game.camera_pitch));
-    direction.z = glm::sin(glm::radians(game.camera_yaw)) * glm::cos(glm::radians(game.camera_pitch));
-    game.camera_direction = glm::normalize(direction);
 }
 
 LOCAL void signal_handler(i32 sig)
@@ -558,6 +473,79 @@ LOCAL bool client_on_key_pressed_event(Event_Code code, Event_Data data)
     return false;
 }
 
+LOCAL bool client_on_mouse_moved_event(Event_Code code, Event_Data data)
+{
+    UNUSED(code);
+
+    f32 xpos = data.F32[0];
+    f32 ypos = data.F32[1];
+
+    PERSIST bool first_mouse_move = true;
+
+    if (glfwGetMouseButton(game.window, GLFW_MOUSE_BUTTON_LEFT) != INPUTACTION_Press) {
+        first_mouse_move = true;
+        return false;
+    }
+
+    PERSIST f32 last_x, last_y;
+
+    if (first_mouse_move) {
+        last_x = (f32) xpos;
+        last_y = (f32) ypos;
+        first_mouse_move = false;
+    }
+
+    f32 xoffset = (f32) xpos - last_x;
+    f32 yoffset = last_y - (f32) ypos;
+    last_x = (f32) xpos;
+    last_y = (f32) ypos;
+
+    PERSIST f32 sensitivity = 0.1f;
+    xoffset *= sensitivity;
+    yoffset *= sensitivity;
+
+    game.camera_yaw += xoffset;
+    game.camera_pitch += yoffset;
+
+    if (game.camera_pitch > 89.0f) {
+        game.camera_pitch = 89.0f;
+    } else if (game.camera_pitch < -89.0f) {
+        game.camera_pitch = -89.0f;
+    }
+
+    glm::vec3 direction;
+    direction.x = glm::cos(glm::radians(game.camera_yaw)) * glm::cos(glm::radians(game.camera_pitch));
+    direction.y = glm::sin(glm::radians(game.camera_pitch));
+    direction.z = glm::sin(glm::radians(game.camera_yaw)) * glm::cos(glm::radians(game.camera_pitch));
+    game.camera_direction = glm::normalize(direction);
+
+    return false;
+}
+
+LOCAL bool client_on_window_resized_event(Event_Code code, Event_Data data)
+{
+    UNUSED(code);
+
+    u32 width = data.U32[0];
+    u32 height = data.U32[1];
+
+    f32 left = -(f32) width / 2.0f, right = (f32) width / 2.0f;
+    f32 bottom = -(f32) height / 2.0f, top = (f32) height / 2.0f;
+
+    game.ui_projection = glm::ortho(left, right, bottom, top);
+    game.current_window_width = width;
+    game.current_window_height = height;
+
+    return false;
+}
+
+LOCAL bool client_on_window_closed_event(Event_Code code, Event_Data data)
+{
+    UNUSED(code); UNUSED(data);
+    running = false;
+    return false;
+}
+
 LOCAL bool game_on_key_pressed_event(Event_Code code, Event_Data data)
 {
     UNUSED(code);
@@ -731,58 +719,14 @@ int main(int argc, char **argv)
     }
     LOG_INFO("successfully loaded libgame\n");
 
-    glfwSetErrorCallback(glfw_error_callback);
-
-    if (!glfwInit()) {
-        LOG_FATAL("failed to initialize glfw\n");
-        exit(EXIT_FAILURE);
-    }
-
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    glfwWindowHint(GLFW_SAMPLES, 4);
-
-    const char *glfw_version = glfwGetVersionString(); UNUSED(glfw_version);
-    LOG_INFO("glfw version: %s\n", glfw_version);
-
     char window_title[256] = {0};
     snprintf(window_title, 256, "voxland client - username: %s", username);
-    game.window = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, window_title, NULL, NULL);
-    if (!game.window) {
-        LOG_FATAL("failed to create glfw window\n");
-        glfwTerminate();
+
+    if (!window_create(WINDOW_WIDTH, WINDOW_HEIGHT, window_title)) {
+        LOG_FATAL("failed to create window\n");
         exit(EXIT_FAILURE);
     }
-
-    glfwMakeContextCurrent(game.window);
-    glfwSetFramebufferSizeCallback(game.window, glfw_framebuffer_size_callback);
-    glfwSetKeyCallback(game.window, glfw_key_callback);
-    glfwSetCharCallback(game.window, glfw_char_callback);
-    glfwSetCursorPosCallback(game.window, glfw_mouse_moved_callback);
-
-    glfwSwapInterval(0);
-
-    u32 err = glewInit();
-    if (err != GLEW_OK) {
-        LOG_FATAL("failed to initialize glew: %s\n", glewGetErrorString(err));
-        glfwDestroyWindow(game.window);
-        glfwTerminate();
-        exit(EXIT_FAILURE);
-    }
-
-    {
-        const unsigned char *gl_vendor    = glGetString(GL_VENDOR); UNUSED(gl_vendor);
-        const unsigned char *gl_renderer  = glGetString(GL_RENDERER); UNUSED(gl_renderer);
-        const unsigned char *gl_version   = glGetString(GL_VERSION); UNUSED(gl_version);
-        const unsigned char *glsl_version = glGetString(GL_SHADING_LANGUAGE_VERSION); UNUSED(glsl_version);
-        LOG_INFO("graphics info:\n");
-        LOG_INFO("  - vendor: %s\n", gl_vendor);
-        LOG_INFO("  - renderer: %s\n", gl_renderer);
-        LOG_INFO("  - opengl version: %s\n", gl_version);
-        LOG_INFO("  - glsl version: %s\n", glsl_version);
-    }
+    game.window = (GLFWwindow *) window_get_native_window();
 
     running = true;
 
@@ -800,6 +744,9 @@ int main(int argc, char **argv)
     event_system_register(EVENT_CODE_KEY_RELEASED, game_on_key_released_event);
     event_system_register(EVENT_CODE_CHAR_PRESSED, game_on_char_pressed_event);
     event_system_register(EVENT_CODE_KEY_PRESSED, client_on_key_pressed_event);
+    event_system_register(EVENT_CODE_MOUSE_MOVED, client_on_mouse_moved_event);
+    event_system_register(EVENT_CODE_WINDOW_RESIZED, client_on_window_resized_event);
+    event_system_register(EVENT_CODE_WINDOW_CLOSED, client_on_window_closed_event);
 
     renderer2d = renderer2d_create();
     game.renderer2d = renderer2d;
@@ -829,7 +776,7 @@ int main(int argc, char **argv)
 
     f32 delta_time = 0.0f;
     f32 last_time = 0.0f;
-    while (!glfwWindowShouldClose(game.window) && running) {
+    while (running) {
         f32 now = (f32) glfwGetTime();
         delta_time = now - last_time;
         last_time = now;
@@ -842,8 +789,8 @@ int main(int argc, char **argv)
 
         display_fps_info(delta_time);
 
-        glfwSwapBuffers(game.window);
-        glfwPollEvents();
+        window_swap_buffers();
+        window_poll_events();
     }
 
     game_shutdown(&game);
@@ -864,8 +811,7 @@ int main(int argc, char **argv)
         }
     }
 
-    glfwDestroyWindow(game.window);
-    glfwTerminate();
+    window_destroy();
 
     renderer2d_destroy(renderer2d);
 
@@ -876,6 +822,9 @@ int main(int argc, char **argv)
     event_system_unregister(EVENT_CODE_KEY_RELEASED, game_on_key_released_event);
     event_system_unregister(EVENT_CODE_CHAR_PRESSED, game_on_char_pressed_event);
     event_system_unregister(EVENT_CODE_KEY_PRESSED, client_on_key_pressed_event);
+    event_system_unregister(EVENT_CODE_MOUSE_MOVED, client_on_mouse_moved_event);
+    event_system_unregister(EVENT_CODE_WINDOW_RESIZED, client_on_window_resized_event);
+    event_system_unregister(EVENT_CODE_WINDOW_CLOSED, client_on_window_closed_event);
     event_system_unregister(EVENT_CODE_APP_LOG, console_on_app_log_event);
     event_system_shutdown();
 
