@@ -6,6 +6,7 @@
 
 #include "client/renderer2d.h"
 #include "client/input_codes.h"
+#include "common/net.h"
 #include "common/defines.h"
 #include "common/player_types.h"
 #include "common/entity_types.h"
@@ -21,6 +22,7 @@ typedef struct {
 } Voxel_Data;
 
 typedef struct {
+    Net_Stat *ns;
     GLFWwindow *window;
     u32 current_window_width;
     u32 current_window_height;

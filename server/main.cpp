@@ -17,6 +17,7 @@
 #include <glm/gtc/type_ptr.hpp>
 
 #include "pollfd_set.h"
+#include "common/net.h"
 #include "common/log.h"
 #include "common/clock.h"
 #include "common/asserts.h"
@@ -44,6 +45,8 @@ typedef struct {
     player_id id;
     UT_hash_handle hh;
 } Player_Moved;
+
+Net_Stat net_stat;
 
 LOCAL bool running;
 LOCAL i32 server_socket;
@@ -130,7 +133,7 @@ bool validate_incoming_client(i32 client_socket)
 
     i64 bytes_read, bytes_sent;
 
-    bytes_sent = send(client_socket, (void *) &puzzle_value, sizeof(puzzle_value), 0);
+    bytes_sent = net_send(client_socket, (void *) &puzzle_value, sizeof(puzzle_value), 0);
     if (bytes_sent == -1) {
         LOG_ERROR("validation: send error: %s\n", strerror(errno));
         return false;
@@ -143,7 +146,7 @@ bool validate_incoming_client(i32 client_socket)
     u64 answer = puzzle_value ^ 0xDEADBEEFCAFEBABE;
 
     u64 result_buffer;
-    bytes_read = recv(client_socket, (void *) &result_buffer, sizeof(result_buffer), 0);
+    bytes_read = net_recv(client_socket, (void *) &result_buffer, sizeof(result_buffer), 0);
     if (bytes_read <= 0) {
         if (bytes_read == -1) {
             LOG_ERROR("validation: recv error: %s\n", strerror(errno));
@@ -155,7 +158,7 @@ bool validate_incoming_client(i32 client_socket)
 
     if (bytes_read == sizeof(result_buffer)) {
         bool status_buffer = result_buffer == answer;
-        bytes_sent = send(client_socket, (void *) &status_buffer, sizeof(status_buffer), 0);
+        bytes_sent = net_send(client_socket, (void *) &status_buffer, sizeof(status_buffer), 0);
         if (bytes_sent == -1) {
             LOG_ERROR("validation status: send error: %s\n", strerror(errno));
             return false;
@@ -427,7 +430,7 @@ bool receive_client_data(i32 client_socket, u8 *recv_buffer, u32 buffer_size, i6
 {
     ASSERT(client_socket > 2 && recv_buffer && bytes_read);
 
-    *bytes_read = recv(client_socket, recv_buffer, buffer_size, 0);
+    *bytes_read = net_recv(client_socket, recv_buffer, buffer_size, 0);
     if (*bytes_read <= 0) {
         if (*bytes_read == -1) {
             LOG_ERROR("recv error: %s\n", strerror(errno));
@@ -515,7 +518,7 @@ void handle_client_event(i32 client_socket)
             ASSERT_MSG(missing_bytes <= INPUT_OVERFLOW_BUFFER_SIZE, "not enough space in overflow buffer");
 
             // Read into INPUT_OVERFLOW_BUFFER of the recv_buffer and proceed to packet interpretation.
-            i64 new_bytes_read = recv(client_socket, &recv_buffer[INPUT_BUFFER_SIZE], missing_bytes, 0);
+            i64 new_bytes_read = net_recv(client_socket, &recv_buffer[INPUT_BUFFER_SIZE], missing_bytes, 0);
             UNUSED(new_bytes_read);
             ASSERT(new_bytes_read == missing_bytes);
         }
@@ -944,6 +947,8 @@ int main(int argc, char **argv)
     light.ambient = glm::vec3(0.2f, 0.2f, 0.2f);
     light.diffuse = glm::vec3(0.5f, 0.5f, 0.5f);
     light.specular = glm::vec3(1.0f, 1.0f, 1.0f);
+
+    net_init(&net_stat);
 
     pthread_mutex_init(&moved_players_lock, NULL);
 

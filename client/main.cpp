@@ -25,18 +25,22 @@
 #include "renderer2d.h"
 #include "input.h"
 #include "input_codes.h"
+#include "common/net.h"
 #include "common/log.h"
 #include "common/asserts.h"
 #include "common/defines.h"
 #include "common/hexdump.h"
 #include "common/packet.h"
 #include "common/clock.h"
+#include "common/size_unit.h"
 #include "common/collections/darray.h"
 
 #define POLLFD_COUNT 1
 #define INPUT_BUFFER_SIZE 1024
 #define INPUT_OVERFLOW_BUFFER_SIZE 1024
 #define POLL_INFINITE_TIMEOUT -1
+
+Net_Stat net_stat;
 
 LOCAL Game game = {};
 LOCAL Renderer2D *renderer2d = NULL;
@@ -210,13 +214,13 @@ LOCAL void process_network_packet(u32 type, void *data)
             game.light.diffuse = glm::vec3(packet->diffuse[0], packet->diffuse[1], packet->diffuse[2]);
             game.light.specular = glm::vec3(packet->specular[0], packet->specular[1], packet->specular[2]);
             LOG_DEBUG("light updated:\n");
-            LOG_DEBUG("  - id: %u\n", game.light.id);
-            LOG_DEBUG("  - radius: %f\n", game.light.radius);
-            LOG_DEBUG("  - angular velocity: %f\n", game.light.angular_velocity);
-            LOG_DEBUG("  - initial position: (%f,%f,%f)\n", game.light.initial_position.x, game.light.initial_position.y, game.light.initial_position.z);
-            LOG_DEBUG("  - ambient color: (%f,%f,%f)\n", game.light.ambient.x, game.light.ambient.y, game.light.ambient.z);
-            LOG_DEBUG("  - diffuse color: (%f,%f,%f)\n", game.light.diffuse.x, game.light.diffuse.y, game.light.diffuse.z);
-            LOG_DEBUG("  - specular color: (%f,%f,%f)\n", game.light.specular.x, game.light.specular.y, game.light.specular.z);
+            LOG_DEBUG("  id: %u\n", game.light.id);
+            LOG_DEBUG("  radius: %f\n", game.light.radius);
+            LOG_DEBUG("  angular velocity: %f\n", game.light.angular_velocity);
+            LOG_DEBUG("  initial position: (%f,%f,%f)\n", game.light.initial_position.x, game.light.initial_position.y, game.light.initial_position.z);
+            LOG_DEBUG("  ambient color: (%f,%f,%f)\n", game.light.ambient.x, game.light.ambient.y, game.light.ambient.z);
+            LOG_DEBUG("  diffuse color: (%f,%f,%f)\n", game.light.diffuse.x, game.light.diffuse.y, game.light.diffuse.z);
+            LOG_DEBUG("  specular color: (%f,%f,%f)\n", game.light.specular.x, game.light.specular.y, game.light.specular.z);
         } break;
         default: {
             LOG_ERROR("unknown packet type value `%u`\n", type);
@@ -227,7 +231,7 @@ LOCAL void process_network_packet(u32 type, void *data)
 LOCAL void handle_incoming_server_data(void)
 {
     u8 recv_buffer[INPUT_BUFFER_SIZE + INPUT_OVERFLOW_BUFFER_SIZE] = {0};
-    i64 bytes_read = recv(client_socket, recv_buffer, INPUT_BUFFER_SIZE, 0);
+    i64 bytes_read = net_recv(client_socket, recv_buffer, INPUT_BUFFER_SIZE, 0);
     if (bytes_read <= 0) {
         if (bytes_read == 0) {
             LOG_INFO("orderly shutdown: disconnected from server\n");
@@ -271,7 +275,7 @@ LOCAL void handle_incoming_server_data(void)
             ASSERT_MSG(missing_bytes <= INPUT_OVERFLOW_BUFFER_SIZE, "not enough space in overflow buffer");
 
             // Read into INPUT_OVERFLOW_BUFFER of the recv_buffer and proceed to packet interpretation.
-            i64 new_bytes_read = recv(client_socket, &recv_buffer[INPUT_BUFFER_SIZE], missing_bytes, 0);
+            i64 new_bytes_read = net_recv(client_socket, &recv_buffer[INPUT_BUFFER_SIZE], missing_bytes, 0);
             UNUSED(new_bytes_read);
             ASSERT(new_bytes_read == missing_bytes);
         }
@@ -341,7 +345,7 @@ LOCAL bool handle_client_validation(i32 client)
     u64 puzzle_buffer;
     i64 bytes_read, bytes_sent;
 
-    bytes_read = recv(client, (void *) &puzzle_buffer, sizeof(puzzle_buffer), 0); // TODO: Handle unresponsive server
+    bytes_read = net_recv(client, (void *) &puzzle_buffer, sizeof(puzzle_buffer), 0); // TODO: Handle unresponsive server
     if (bytes_read <= 0) {
         if (bytes_read == -1) {
             LOG_ERROR("validation: recv error: %s\n", strerror(errno));
@@ -353,7 +357,7 @@ LOCAL bool handle_client_validation(i32 client)
 
     if (bytes_read == sizeof(puzzle_buffer)) {
         u64 answer = puzzle_buffer ^ 0xDEADBEEFCAFEBABE; // TODO: Come up with a better validation function
-        bytes_sent = send(client, (void *) &answer, sizeof(answer), 0);
+        bytes_sent = net_send(client, (void *) &answer, sizeof(answer), 0);
         if (bytes_sent == -1) {
             LOG_ERROR("validation: send error: %s\n", strerror(errno));
             return false;
@@ -363,7 +367,7 @@ LOCAL bool handle_client_validation(i32 client)
         }
 
         bool status_buffer;
-        bytes_read = recv(client, (void *) &status_buffer, sizeof(status_buffer), 0);
+        bytes_read = net_recv(client, (void *) &status_buffer, sizeof(status_buffer), 0);
         if (bytes_read <= 0) {
             if (bytes_read == -1) {
                 LOG_ERROR("validation status: recv error: %s\n", strerror(errno));
@@ -596,13 +600,41 @@ LOCAL void display_fps_info(f32 dt)
         fps_info_update_accumulator = 0.0f;
     }
 
-    renderer2d_begin_scene(renderer2d, &game.ui_projection);
     glm::vec2 fps_info_position = glm::vec2(
         (f32) game.current_window_width * 0.5f - (f32) strlen(fps_info) * font_width,
         (f32) game.current_window_height * 0.5f - font_height
     );
     renderer2d_draw_text(renderer2d, fps_info, fps_info_font_size, fps_info_position, glm::vec3(0.9f));
-    renderer2d_end_scene(renderer2d);
+}
+
+LOCAL void display_net_info(f32 dt)
+{
+    PERSIST Font_Atlas_Size net_info_font_size = FA16;
+    PERSIST f32 font_width = (f32) renderer2d_get_font_width(renderer2d, net_info_font_size);
+    PERSIST f32 font_height = (f32) renderer2d_get_font_height(renderer2d, net_info_font_size);
+    PERSIST u64 net_up = 0;
+    PERSIST u64 net_down = 0;
+    PERSIST f32 net_info_update_period = NET_STAT_UPDATE_PERIOD;
+    PERSIST f32 net_info_accumulator = NET_STAT_UPDATE_PERIOD - 0.2f;
+    PERSIST char net_info[64] = {};
+
+    net_info_accumulator += dt;
+    if (net_info_accumulator >= net_info_update_period) {
+        net_get_bandwidth(&net_up, &net_down);
+        net_up = (u64) ((f32) net_up / NET_STAT_UPDATE_PERIOD);
+        net_down = (u64) ((f32) net_down / NET_STAT_UPDATE_PERIOD);
+        f32 up_formatted = 0.0f, down_formatted = 0.0f;
+        const char *up_unit = get_size_unit(net_up, &up_formatted);
+        const char *down_unit = get_size_unit(net_down, &down_formatted);
+        snprintf(net_info, sizeof(net_info), "network up: %.2f%s down: %.2f%s", up_formatted, up_unit, down_formatted, down_unit);
+        net_info_accumulator = 0.0f;
+    }
+
+    glm::vec2 net_info_position = glm::vec2(
+        -font_width * (f32) strlen(net_info) * 0.5f,
+        (f32) game.current_window_height * 0.5f - font_height
+    );
+    renderer2d_draw_text(renderer2d, net_info, net_info_font_size, net_info_position, glm::vec3(0.9f));
 }
 
 LOCAL char *shift(int *argc, char ***argv)
@@ -621,6 +653,8 @@ LOCAL void usage(FILE *stream, const char *const program)
 
 int main(int argc, char **argv)
 {
+    net_init(&net_stat);
+
     if (!event_system_init()) {
         LOG_FATAL("failed to initialize event system\n");
         exit(EXIT_FAILURE);
@@ -749,6 +783,8 @@ int main(int argc, char **argv)
     event_system_register(EVENT_CODE_WINDOW_RESIZED, client_on_window_resized_event);
     event_system_register(EVENT_CODE_WINDOW_CLOSED, client_on_window_closed_event);
 
+    game.ns = &net_stat;
+
     renderer2d = renderer2d_create();
     game.renderer2d = renderer2d;
 
@@ -788,7 +824,12 @@ int main(int argc, char **argv)
         game_update(&game, delta_time);
         console_update(renderer2d, &game.ui_projection, game.current_window_width, game.current_window_height, delta_time);
 
+        renderer2d_begin_scene(renderer2d, &game.ui_projection);
         display_fps_info(delta_time);
+        display_net_info(delta_time);
+        renderer2d_end_scene(renderer2d);
+
+        net_update(delta_time);
 
         window_swap_buffers();
         window_poll_events();

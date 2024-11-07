@@ -79,6 +79,8 @@ void game_init(Game *game)
     game->vao = 0;
     game->vbo = 0;
 
+    net_init(game->ns);
+
     bool shader_create_result;
     UNUSED(shader_create_result);
 

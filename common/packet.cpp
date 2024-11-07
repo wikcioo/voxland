@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <sys/socket.h>
 
+#include "net.h"
 #include "log.h"
 #include "asserts.h"
 
@@ -94,7 +95,7 @@ bool packet_send(i32 socket, u32 type, void *packet_data)
     i64 bytes_sent_total = 0;
     i64 bytes_sent = 0;
     while (bytes_sent_total < buffer_size) {
-        bytes_sent = send(socket, buffer + bytes_sent, buffer_size - bytes_sent, 0);
+        bytes_sent = net_send(socket, buffer + bytes_sent, buffer_size - bytes_sent, 0);
         if (bytes_sent <= 0) {
             if (bytes_sent == -1) {
                 LOG_ERROR("packet_enqueue error: %s\n", strerror(errno));
