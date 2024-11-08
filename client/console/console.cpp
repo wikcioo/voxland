@@ -10,6 +10,8 @@
 #include "client.h"
 #include "input.h"
 #include "input_codes.h"
+#include "commands.h"
+#include "command_manager.h"
 #include "common/log.h"
 #include "common/asserts.h"
 #include "common/string_view.h"
@@ -62,7 +64,6 @@ LOCAL glm::vec3 console_cursor_color = glm::vec3(0.35f, 0.65f, 0.26f);
 LOCAL glm::vec3 console_text_color = glm::vec3(0.9f);
 LOCAL glm::vec3 console_bg_color = glm::vec3(0.17f, 0.035f, 0.2f);
 
-LOCAL char *shift(u32 *argc, char ***argv);
 LOCAL bool console_exec_from_argv(u32 argc, char **argv);
 LOCAL bool console_exec_from_input(void);
 LOCAL void console_handle_backspace();
@@ -74,12 +75,16 @@ void console_init(void)
     console.history_cursor = -1;
     console.history = (Console_Cmd *) darray_create(sizeof(Console_Cmd));
     console.logs = (char **) darray_create(sizeof(char *));
+
+    cmd_register_all();
 }
 
 void console_shutdown(void)
 {
     darray_destroy(console.history);
     darray_destroy(console.logs);
+
+    command_manager_cleanup();
 }
 
 void console_update(Renderer2D *renderer2d, const glm::mat4 *ui_projection, u32 ww, u32 wh, f32 dt)
@@ -298,84 +303,11 @@ bool console_on_app_log_event(Event_Code code, Event_Data data)
     return false;
 }
 
-LOCAL char *shift(u32 *argc, char ***argv)
-{
-    ASSERT(*argc > 0);
-    char *result = **argv;
-    *argc -= 1;
-    *argv += 1;
-    return result;
-}
-
 LOCAL bool console_exec_from_argv(u32 argc, char **argv)
 {
     while (argc > 0) {
         const char *flag = shift(&argc, &argv);
-
-        if (strcmp(flag, "reload") == 0) {
-            if (reload_libgame()) {
-                LOG_INFO("successfully reloaded libgame\n");
-                return true;
-            } else {
-                LOG_ERROR("failed to reload libgame\n");
-                return false;
-            }
-        } else if (strcmp(flag, "vsync") == 0) {
-            if (argc == 0) {
-                LOG_ERROR("usage: vsync <state>\n");
-                LOG_ERROR("missing argument\n");
-                return false;
-            }
-
-            const char *state = shift(&argc, &argv);
-            if (strcmp(state, "on") == 0) {
-                glfwSwapInterval(1);
-                LOG_INFO("turned on vsync\n");
-                return true;
-            } else if (strcmp(state, "off") == 0) {
-                glfwSwapInterval(0);
-                LOG_INFO("turned off vsync\n");
-                return true;
-            } else {
-                LOG_ERROR("unknown vsync argument `%s`\n", state);
-                return false;
-            }
-        } else if (strcmp(flag, "showinfo") == 0) {
-            if (argc < 2) {
-                LOG_ERROR("usage: showinfo <type> <state>\n");
-                LOG_ERROR("missing argument(s)\n");
-                return false;
-            }
-
-            const char *type = shift(&argc, &argv);
-            const char *state = shift(&argc, &argv);
-
-            bool b_state;
-            if (strcmp(state, "on") == 0) {
-                b_state = true;
-            } else if (strcmp(state, "off") == 0) {
-                b_state = false;
-            } else {
-                LOG_ERROR("unknown showinfo argument `%s`\n", state);
-                return false;
-            }
-
-            if (strcmp(type, "fps") == 0) {
-                client_show_fps_info = b_state;
-            } else if (strcmp(type, "network") == 0) {
-                client_show_net_info = b_state;
-            } else if (strcmp(type, "memory_usage") == 0) {
-                client_show_mem_info = b_state;
-            } else {
-                LOG_ERROR("unknown showinfo argument `%s`\n", type);
-                return false;
-            }
-
-            return true;
-        } else {
-            LOG_ERROR("unknown flag: `%s`\n", flag);
-            return false;
-        }
+        return command_manager_run(flag, argc, argv);
     }
 
     return true;
@@ -383,6 +315,8 @@ LOCAL bool console_exec_from_argv(u32 argc, char **argv)
 
 LOCAL bool console_exec_from_input(void)
 {
+    LOG_INFO("$ %s\n", console.input);
+
     Console_Cmd cmd = {};
     cmd.length = console.cursor;
     memcpy(cmd.input, console.input, console.cursor);

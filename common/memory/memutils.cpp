@@ -18,7 +18,8 @@ LOCAL const char *memory_tag_strings[MEMORY_TAG_COUNT] = {
     "game       ",
     "opengl     ",
     "ui         ",
-    "network    "
+    "network    ",
+    "console    "
 };
 
 LOCAL Memory_Stats *stats;

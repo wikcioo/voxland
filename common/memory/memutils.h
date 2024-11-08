@@ -13,6 +13,7 @@ typedef enum {
     MEMORY_TAG_OPENGL,
     MEMORY_TAG_UI,
     MEMORY_TAG_NETWORK,
+    MEMORY_TAG_CONSOLE,
     MEMORY_TAG_COUNT
 } Memory_Tag;
 

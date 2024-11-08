@@ -15,8 +15,9 @@ endif
 BUILD_DIR := build/$(config)
 
 CLIENT_LIBS    := $(shell pkg-config --libs glfw3 glew freetype2)
-CLIENT_INCS    := -Iclient/lib -I. -Ithird_party $(shell pkg-config --cflags freetype2)
+CLIENT_INCS    := -Iclient/lib -I. -I./client -Ithird_party $(shell pkg-config --cflags freetype2)
 CLIENT_SOURCES := $(wildcard client/*.cpp)
+CLIENT_SOURCES += $(wildcard client/console/*.cpp)
 CLIENT_OBJECTS := $(addprefix $(BUILD_DIR)/client/, $(addsuffix .cpp.o, $(basename $(notdir $(CLIENT_SOURCES)))))
 
 CLIENT_SO_INCS    := -I. -Ithird_party
@@ -63,6 +64,9 @@ $(BUILD_DIR)/client/client: $(CLIENT_OBJECTS) $(COMMON_OBJECTS)
 	$(CXX) $^ $(CXXFLAGS) $(CLIENT_LIBS) -Wl,-rpath,$(BUILD_DIR)/client/lib -o $@
 
 $(BUILD_DIR)/client/%.cpp.o: client/%.cpp
+	$(CXX) -c $< $(CLIENT_INCS) $(CXXFLAGS) -fPIC -o $@
+
+$(BUILD_DIR)/client/%.cpp.o: client/console/%.cpp
 	$(CXX) -c $< $(CLIENT_INCS) $(CXXFLAGS) -fPIC -o $@
 
 $(BUILD_DIR)/client/lib/lib%.so: client/lib/%.cpp $(COMMON_OBJECTS) $(BUILD_DIR)/client/renderer2d.cpp.o $(BUILD_DIR)/client/shader.cpp.o $(BUILD_DIR)/client/texture.cpp.o
