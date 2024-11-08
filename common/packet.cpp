@@ -8,11 +8,12 @@
 #include "net.h"
 #include "log.h"
 #include "asserts.h"
+#include "memory/memutils.h"
 
 u32 serialize_packet_txt_msg(const Packet_Text_Message *packet, u8 **buffer)
 {
     u32 payload_size = sizeof(packet->length) + packet->length;
-    *buffer = (u8 *) malloc(sizeof(Packet_Header) + payload_size);
+    *buffer = (u8 *) mem_alloc(sizeof(Packet_Header) + payload_size, MEMORY_TAG_NETWORK);
 
     memcpy(*buffer + sizeof(Packet_Header), &packet->length, sizeof(packet->length));
     memcpy(*buffer + sizeof(Packet_Header) + sizeof(packet->length), packet->message, packet->length);
@@ -33,7 +34,7 @@ void deserialize_packet_txt_msg(void *data, Packet_Text_Message *packet)
 u32 serialize_packet_player_batch_move(const Packet_Player_Batch_Move *packet, u8 **buffer)
 {
     u32 payload_size = (u32) (sizeof(packet->count) + (packet->count * sizeof(player_id)) + (packet->count * 3 * sizeof(f32)));
-    *buffer = (u8 *) malloc(sizeof(Packet_Header) + payload_size);
+    *buffer = (u8 *) mem_alloc(sizeof(Packet_Header) + payload_size, MEMORY_TAG_NETWORK);
 
     u32 offset = sizeof(Packet_Header);
 
@@ -81,7 +82,7 @@ bool packet_send(i32 socket, u32 type, void *packet_data)
         default: {
             // The packet is fixed size.
             header.payload_size = PACKET_TYPE_SIZE[type];
-            buffer = (u8 *) malloc(sizeof(Packet_Header) + header.payload_size);
+            buffer = (u8 *) mem_alloc(sizeof(Packet_Header) + header.payload_size, MEMORY_TAG_NETWORK);
             memcpy(buffer + sizeof(Packet_Header), packet_data, header.payload_size);
         }
     }
@@ -107,7 +108,7 @@ bool packet_send(i32 socket, u32 type, void *packet_data)
         bytes_sent_total += bytes_sent;
     }
 
-    free(buffer);
+    mem_free(buffer, sizeof(Packet_Header) + header.payload_size, MEMORY_TAG_NETWORK);
 
     return bytes_sent_total == buffer_size;
 }

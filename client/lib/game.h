@@ -10,6 +10,7 @@
 #include "common/defines.h"
 #include "common/player_types.h"
 #include "common/entity_types.h"
+#include "common/memory/memutils.h"
 
 #define WINDOW_WIDTH 1280
 #define WINDOW_HEIGHT 720
@@ -23,6 +24,7 @@ typedef struct {
 
 typedef struct {
     Net_Stat *ns;
+    Memory_Stats *ms;
     GLFWwindow *window;
     u32 current_window_width;
     u32 current_window_height;

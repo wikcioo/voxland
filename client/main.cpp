@@ -33,6 +33,7 @@
 #include "common/packet.h"
 #include "common/clock.h"
 #include "common/size_unit.h"
+#include "common/memory/memutils.h"
 #include "common/collections/darray.h"
 
 #define POLLFD_COUNT 1
@@ -41,6 +42,7 @@
 #define POLL_INFINITE_TIMEOUT -1
 
 Net_Stat net_stat;
+Memory_Stats mem_stats;
 
 LOCAL Game game = {};
 LOCAL Renderer2D *renderer2d = NULL;
@@ -154,7 +156,7 @@ LOCAL void process_network_packet(u32 type, void *data)
                 break;
             }
 
-            player = (Player *) malloc(sizeof(*player));
+            player = (Player *) mem_alloc(sizeof(*player), MEMORY_TAG_GAME);
             memset(player, 0, sizeof(*player));
             // TODO: move player init to a function
             player->id = packet->id;
@@ -174,7 +176,7 @@ LOCAL void process_network_packet(u32 type, void *data)
             }
             LOG_DEBUG("removed player: username='%s' id=%u\n", player->username, player->id);
             HASH_DEL(game.players, player);
-            free(player); // NOTE: maybe we want to keep the data for further use
+            mem_free(player, sizeof(Player), MEMORY_TAG_GAME); // NOTE: maybe we want to keep the data for further use
         } break;
         case PACKET_TYPE_PLAYER_MOVE: {
             Packet_Player_Move *packet = (Packet_Player_Move *) data;
@@ -615,19 +617,19 @@ LOCAL void display_net_info(f32 dt)
     PERSIST u64 net_up = 0;
     PERSIST u64 net_down = 0;
     PERSIST f32 net_info_update_period = NET_STAT_UPDATE_PERIOD;
-    PERSIST f32 net_info_accumulator = NET_STAT_UPDATE_PERIOD - 0.2f;
+    PERSIST f32 net_info_update_accumulator = NET_STAT_UPDATE_PERIOD - 0.2f;
     PERSIST char net_info[64] = {};
 
-    net_info_accumulator += dt;
-    if (net_info_accumulator >= net_info_update_period) {
+    net_info_update_accumulator += dt;
+    if (net_info_update_accumulator >= net_info_update_period) {
         net_get_bandwidth(&net_up, &net_down);
         net_up = (u64) ((f32) net_up / NET_STAT_UPDATE_PERIOD);
         net_down = (u64) ((f32) net_down / NET_STAT_UPDATE_PERIOD);
         f32 up_formatted = 0.0f, down_formatted = 0.0f;
         const char *up_unit = get_size_unit(net_up, &up_formatted);
         const char *down_unit = get_size_unit(net_down, &down_formatted);
-        snprintf(net_info, sizeof(net_info), "network up: %.2f%s down: %.2f%s", up_formatted, up_unit, down_formatted, down_unit);
-        net_info_accumulator = 0.0f;
+        snprintf(net_info, sizeof(net_info), "network up: %.2f %s down: %.2f %s", up_formatted, up_unit, down_formatted, down_unit);
+        net_info_update_accumulator = 0.0f;
     }
 
     glm::vec2 net_info_position = glm::vec2(
@@ -635,6 +637,30 @@ LOCAL void display_net_info(f32 dt)
         (f32) game.current_window_height * 0.5f - font_height
     );
     renderer2d_draw_text(renderer2d, net_info, net_info_font_size, net_info_position, glm::vec3(0.9f));
+}
+
+LOCAL void display_mem_info(f32 dt)
+{
+    PERSIST Font_Atlas_Size mem_info_font_size = FA16;
+    PERSIST f32 font_height = (f32) renderer2d_get_font_height(renderer2d, mem_info_font_size);
+    PERSIST f32 mem_info_update_period = 0.5f;
+    PERSIST f32 mem_info_update_accumulator = 0.3f;
+    PERSIST char mem_info[1024] = {};
+
+    mem_info_update_accumulator += dt;
+    if (mem_info_update_accumulator >= mem_info_update_period) {
+        char *usage = memory_usage_as_cstr();
+        ASSERT(strlen(usage) < 1024);
+        mem_copy(mem_info, usage, strlen(usage));
+        free(usage);
+        mem_info_update_accumulator = 0.0f;
+    }
+
+    glm::vec2 mem_info_position = glm::vec2(
+        (f32) game.current_window_width * -0.5f,
+        (f32) game.current_window_height * 0.5f - font_height
+    );
+    renderer2d_draw_text(renderer2d, mem_info, mem_info_font_size, mem_info_position, glm::vec3(0.9f));
 }
 
 LOCAL char *shift(int *argc, char ***argv)
@@ -654,6 +680,7 @@ LOCAL void usage(FILE *stream, const char *const program)
 int main(int argc, char **argv)
 {
     net_init(&net_stat);
+    mem_init(&mem_stats);
 
     if (!event_system_init()) {
         LOG_FATAL("failed to initialize event system\n");
@@ -784,6 +811,7 @@ int main(int argc, char **argv)
     event_system_register(EVENT_CODE_WINDOW_CLOSED, client_on_window_closed_event);
 
     game.ns = &net_stat;
+    game.ms = &mem_stats;
 
     renderer2d = renderer2d_create();
     game.renderer2d = renderer2d;
@@ -792,7 +820,7 @@ int main(int argc, char **argv)
     f32 bottom = -(f32) WINDOW_HEIGHT / 2.0f, top = (f32) WINDOW_HEIGHT / 2.0f;
     game.ui_projection = glm::ortho(left, right, bottom, top);
 
-    game.self = (Player *) malloc(sizeof(Player));
+    game.self = (Player *) mem_alloc(sizeof(Player), MEMORY_TAG_GAME);
     memset(game.self, 0, sizeof(Player));
     game.client_socket = client_socket;
     game.client_update_freq = 60.0f;
@@ -827,6 +855,7 @@ int main(int argc, char **argv)
         renderer2d_begin_scene(renderer2d, &game.ui_projection);
         display_fps_info(delta_time);
         display_net_info(delta_time);
+        display_mem_info(delta_time);
         renderer2d_end_scene(renderer2d);
 
         net_update(delta_time);
@@ -842,7 +871,7 @@ int main(int argc, char **argv)
         LOG_ERROR("failed to send player remove packet\n");
     }
 
-    free(game.self);
+    mem_free(game.self, sizeof(Player), MEMORY_TAG_GAME);
 
     {
         // uthash cleanup

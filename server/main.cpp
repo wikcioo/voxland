@@ -27,6 +27,7 @@
 #include "common/event.h"
 #include "common/player_types.h"
 #include "common/entity_types.h"
+#include "common/memory/memutils.h"
 #include "common/collections/darray.h"
 #include "uthash/uthash.h"
 
@@ -47,6 +48,7 @@ typedef struct {
 } Player_Moved;
 
 Net_Stat net_stat;
+Memory_Stats mem_stats;
 
 LOCAL bool running;
 LOCAL i32 server_socket;
@@ -779,6 +781,9 @@ LOCAL void usage(FILE *stream, const char *const program)
 
 int main(int argc, char **argv)
 {
+    net_init(&net_stat);
+    mem_init(&mem_stats);
+
     if (!event_system_init()) {
         LOG_FATAL("failed to initialize event system\n");
         exit(EXIT_FAILURE);
@@ -947,8 +952,6 @@ int main(int argc, char **argv)
     light.ambient = glm::vec3(0.2f, 0.2f, 0.2f);
     light.diffuse = glm::vec3(0.5f, 0.5f, 0.5f);
     light.specular = glm::vec3(1.0f, 1.0f, 1.0f);
-
-    net_init(&net_stat);
 
     pthread_mutex_init(&moved_players_lock, NULL);
 

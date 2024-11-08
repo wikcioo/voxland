@@ -13,6 +13,8 @@
 #include "common/clock.h"
 #include "common/asserts.h"
 
+const i32 num_instances = 100 * 100;
+
 void process_input(Game *game, f32 dt)
 {
     PERSIST f32 velocity = 5.0f;
@@ -80,6 +82,7 @@ void game_init(Game *game)
     game->vbo = 0;
 
     net_init(game->ns);
+    mem_init(game->ms);
 
     bool shader_create_result;
     UNUSED(shader_create_result);
@@ -165,9 +168,7 @@ void game_init(Game *game)
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(f32), (const void *) (3 * sizeof(f32)));
     glEnableVertexAttribArray(1);
 
-    const i32 num_instances = 100 * 100;
-
-    game->voxel_data = (Voxel_Data *) malloc(num_instances * sizeof(Voxel_Data));
+    game->voxel_data = (Voxel_Data *) mem_alloc(num_instances * sizeof(Voxel_Data), MEMORY_TAG_GAME);
     ASSERT_MSG(game->voxel_data != NULL, "failed to allocate memory for voxel models");
 
     u32 count = 0;
@@ -287,14 +288,6 @@ void game_update(Game *game, f32 dt)
     renderer2d_begin_scene(game->renderer2d, &game->ui_projection);
     renderer2d_draw_line(game->renderer2d, glm::vec2(-10.0f, 0.0f), glm::vec2(10.0f, 0.0f), glm::vec3(1.0f));
     renderer2d_draw_line(game->renderer2d, glm::vec2(0.0f, -10.0f), glm::vec2(0.0f, 10.0f), glm::vec3(1.0f));
-    renderer2d_draw_text(game->renderer2d,
-                       "Voxland Client",
-                       FA16,
-                       glm::vec2(
-                           -(f32) game->current_window_width * 0.5f,
-                            (f32) game->current_window_height * 0.5f - (f32) renderer2d_get_font_bearing_y(game->renderer2d, FA16)
-                       ),
-                       glm::vec3(1.0f));
     renderer2d_end_scene(game->renderer2d);
 }
 
@@ -306,7 +299,7 @@ void game_shutdown(Game *game)
     glDeleteVertexArrays(1, &game->vao);
     glDeleteBuffers(1, &game->vbo);
     glDeleteBuffers(1, &game->inst_vbo);
-    free(game->voxel_data);
+    mem_free(game->voxel_data, num_instances * sizeof(Voxel_Data), MEMORY_TAG_GAME);
 }
 
 } // extern "C"

@@ -9,6 +9,7 @@
 
 #include "common/log.h"
 #include "common/asserts.h"
+#include "common/memory/memutils.h"
 
 #define FONT_FILEPATH "assets/fonts/IosevkaNerdFontMono-Regular.ttf"
 
@@ -24,7 +25,7 @@ LOCAL void create_font_atlas(FT_Face ft_face, u32 height, Font_Atlas *out_atlas)
 
 Renderer2D *renderer2d_create(void)
 {
-    Renderer2D *renderer2d = (Renderer2D *) malloc(sizeof(Renderer2D));
+    Renderer2D *renderer2d = (Renderer2D *) mem_alloc(sizeof(Renderer2D), MEMORY_TAG_RENDERER2D);
 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -32,7 +33,7 @@ Renderer2D *renderer2d_create(void)
     create_shaders(renderer2d);
 
     // quad
-    renderer2d->quad_vertex_buffer_base = (Quad_Vertex *) malloc(RENDERER_MAX_VERTEX_COUNT * sizeof(Quad_Vertex));
+    renderer2d->quad_vertex_buffer_base = (Quad_Vertex *) mem_alloc(RENDERER_MAX_VERTEX_COUNT * sizeof(Quad_Vertex), MEMORY_TAG_RENDERER2D);
 
     renderer2d->white_texture_slot = 0;
     renderer2d->texture_slot_index = 1;
@@ -106,7 +107,7 @@ Renderer2D *renderer2d_create(void)
     shader_set_uniform_int_array(&renderer2d->quad_shader, "u_textures", samplers, 32);
 
     // circle
-    renderer2d->circle_vertex_buffer_base = (Circle_Vertex *) malloc(RENDERER_MAX_VERTEX_COUNT * sizeof(Circle_Vertex));
+    renderer2d->circle_vertex_buffer_base = (Circle_Vertex *) mem_alloc(RENDERER_MAX_VERTEX_COUNT * sizeof(Circle_Vertex), MEMORY_TAG_RENDERER2D);
 
     glCreateVertexArrays(1, &renderer2d->circle_va);
     glBindVertexArray(renderer2d->circle_va);
@@ -135,7 +136,7 @@ Renderer2D *renderer2d_create(void)
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
 
     // line
-    renderer2d->line_vertex_buffer_base = (Line_Vertex *) malloc(RENDERER_MAX_VERTEX_COUNT * sizeof(Line_Vertex));
+    renderer2d->line_vertex_buffer_base = (Line_Vertex *) mem_alloc(RENDERER_MAX_VERTEX_COUNT * sizeof(Line_Vertex), MEMORY_TAG_RENDERER2D);
 
     glCreateVertexArrays(1, &renderer2d->line_va);
     glBindVertexArray(renderer2d->line_va);
@@ -153,7 +154,7 @@ Renderer2D *renderer2d_create(void)
     renderer2d_set_line_width(renderer2d, 2.0f);
 
     // text
-    renderer2d->text_vertex_buffer_base = (Text_Vertex *) malloc(RENDERER_MAX_VERTEX_COUNT * sizeof(Text_Vertex));
+    renderer2d->text_vertex_buffer_base = (Text_Vertex *) mem_alloc(RENDERER_MAX_VERTEX_COUNT * sizeof(Text_Vertex), MEMORY_TAG_RENDERER2D);
 
     glCreateVertexArrays(1, &renderer2d->text_va);
     glBindVertexArray(renderer2d->text_va);
@@ -196,10 +197,10 @@ Renderer2D *renderer2d_create(void)
 
 void renderer2d_destroy(Renderer2D *renderer2d)
 {
-    free(renderer2d->quad_vertex_buffer_base);
-    free(renderer2d->circle_vertex_buffer_base);
-    free(renderer2d->line_vertex_buffer_base);
-    free(renderer2d->text_vertex_buffer_base);
+    mem_free(renderer2d->quad_vertex_buffer_base, sizeof(Quad_Vertex), MEMORY_TAG_RENDERER2D);
+    mem_free(renderer2d->circle_vertex_buffer_base, sizeof(Circle_Vertex), MEMORY_TAG_RENDERER2D);
+    mem_free(renderer2d->line_vertex_buffer_base, sizeof(Line_Vertex), MEMORY_TAG_RENDERER2D);
+    mem_free(renderer2d->text_vertex_buffer_base, sizeof(Text_Vertex), MEMORY_TAG_RENDERER2D);
 
     texture_destroy(&renderer2d->white_texture);
 
@@ -225,7 +226,7 @@ void renderer2d_destroy(Renderer2D *renderer2d)
     FT_Done_Face(face);
     FT_Done_FreeType(ft);
 
-    free(renderer2d);
+    mem_free(renderer2d, sizeof(Renderer2D), MEMORY_TAG_RENDERER2D);
 }
 
 void renderer2d_begin_scene(Renderer2D *renderer2d, const glm::mat4 *projection)

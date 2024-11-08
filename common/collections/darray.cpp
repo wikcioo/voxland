@@ -4,6 +4,7 @@
 #include <stdlib.h>
 
 #include "common/asserts.h"
+#include "common/memory/memutils.h"
 
 #define HEADER_SIZE (DARRAY_FIELD_COUNT * sizeof(u64))
 
@@ -13,7 +14,7 @@ void *_darray_create(u64 capacity, u64 stride)
     ASSERT(stride > 0);
 
     u64 total_size = HEADER_SIZE + capacity * stride;
-    u64 *memory = (u64 *) malloc(total_size);
+    u64 *memory = (u64 *) mem_alloc(total_size, MEMORY_TAG_DARRAY);
 
     memory[DARRAY_FIELD_CAPACITY] = capacity;
     memory[DARRAY_FIELD_STRIDE]   = stride;
@@ -26,12 +27,16 @@ void _darray_destroy(void *array)
 {
     ASSERT(array);
 
+    u64 capacity = darray_capacity(array); UNUSED(capacity);
+    u64 stride = darray_stride(array);
+    u64 total_size = HEADER_SIZE + capacity * stride;
+
     _darray_field_set(array, DARRAY_FIELD_CAPACITY, 0);
     _darray_field_set(array, DARRAY_FIELD_STRIDE, 0);
     _darray_field_set(array, DARRAY_FIELD_LENGTH, 0);
 
     u64 *header = (u64 *) array - DARRAY_FIELD_COUNT;
-    free(header);
+    mem_free(header, total_size, MEMORY_TAG_DARRAY);
 }
 
 void *_darray_resize(void *array, u64 new_capacity)
