@@ -3,7 +3,7 @@
 
 #include "memory/arena_allocator.h"
 
-bool arena_allocator_create_and_destroy(void)
+u8 arena_allocator_create_and_destroy(void)
 {
     Arena_Allocator allocator;
     arena_allocator_create(sizeof(i32), 0, &allocator);
@@ -17,7 +17,7 @@ bool arena_allocator_create_and_destroy(void)
     return true;
 }
 
-bool arena_allocator_single_allocation_all_space(void)
+u8 arena_allocator_single_allocation_all_space(void)
 {
     u64 arena_size = 10 * sizeof(u64);
 
@@ -32,7 +32,7 @@ bool arena_allocator_single_allocation_all_space(void)
     return true;
 }
 
-bool arena_allocator_multi_allocation_all_space(void)
+u8 arena_allocator_multi_allocation_all_space(void)
 {
     u64 num_allocations = 100;
 
@@ -50,7 +50,7 @@ bool arena_allocator_multi_allocation_all_space(void)
     return true;
 }
 
-bool arena_allocator_over_allocate(void)
+u8 arena_allocator_over_allocate(void)
 {
     u64 arena_size = 10 * sizeof(u64);
 
@@ -71,7 +71,7 @@ bool arena_allocator_over_allocate(void)
     return true;
 }
 
-bool arena_allocator_allocate_all_space_and_free_all(void)
+u8 arena_allocator_allocate_all_space_and_free_all(void)
 {
     u64 arena_size = 10 * sizeof(u64);
 

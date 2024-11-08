@@ -41,16 +41,19 @@ void test_manager_run_all_tests(void)
             // the failing test prints out an error message
             failed++;
         } else if (result == SKIP_RESULT) {
-            printf(TRACE_COLOR " skipped\n" RESET_COLOR);
+            printf(WARN_COLOR " skipped\n" RESET_COLOR);
             skipped++;
         }
     }
 
-    printf(WARN_COLOR "summary" RESET_COLOR ": finished running %llu tests: "
-           INFO_COLOR "%u passed" RESET_COLOR ", "
-           ERROR_COLOR "%u failed" RESET_COLOR ", "
-           TRACE_COLOR "%u skipped" RESET_COLOR "\n",
-           length, passed, failed, skipped);
+    char results_buf[256] = {};
+    snprintf(results_buf, sizeof(results_buf),
+             "%ssummary%s: finished running %llu tests: %s%u passed%s, %s%u failed%s, %s%u skipped%s\n",
+             DEBUG_COLOR, RESET_COLOR, length,
+             (passed > 0 ? INFO_COLOR : ""), passed, RESET_COLOR,
+             (failed > 0 ? ERROR_COLOR : ""), failed, RESET_COLOR,
+             (skipped > 0 ? WARN_COLOR : ""), skipped, RESET_COLOR);
+    printf("%s", results_buf);
 }
 
 void test_manager_shutdown(void)

@@ -3,7 +3,7 @@
 
 #include "collections/darray.h"
 
-bool darray_create_and_destroy(void)
+u8 darray_create_and_destroy(void)
 {
     void *array = darray_create(sizeof(i32));
     expect_true(array != 0);
@@ -20,7 +20,7 @@ bool darray_create_and_destroy(void)
     return true;
 }
 
-bool darray_push_and_pop(void)
+u8 darray_push_and_pop(void)
 {
     struct mydata {
         i32 foo;
@@ -69,7 +69,7 @@ bool darray_push_and_pop(void)
     return true;
 }
 
-bool darray_push_at_and_pop_at(void)
+u8 darray_push_at_and_pop_at(void)
 {
     i32 *array = (i32 *) darray_create(sizeof(i32));
     darray_push(array, 10);
