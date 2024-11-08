@@ -340,6 +340,38 @@ LOCAL bool console_exec_from_argv(u32 argc, char **argv)
                 LOG_ERROR("unknown vsync argument `%s`\n", state);
                 return false;
             }
+        } else if (strcmp(flag, "showinfo") == 0) {
+            if (argc < 2) {
+                LOG_ERROR("usage: showinfo <type> <state>\n");
+                LOG_ERROR("missing argument(s)\n");
+                return false;
+            }
+
+            const char *type = shift(&argc, &argv);
+            const char *state = shift(&argc, &argv);
+
+            bool b_state;
+            if (strcmp(state, "on") == 0) {
+                b_state = true;
+            } else if (strcmp(state, "off") == 0) {
+                b_state = false;
+            } else {
+                LOG_ERROR("unknown showinfo argument `%s`\n", state);
+                return false;
+            }
+
+            if (strcmp(type, "fps") == 0) {
+                client_show_fps_info = b_state;
+            } else if (strcmp(type, "network") == 0) {
+                client_show_net_info = b_state;
+            } else if (strcmp(type, "memory_usage") == 0) {
+                client_show_mem_info = b_state;
+            } else {
+                LOG_ERROR("unknown showinfo argument `%s`\n", type);
+                return false;
+            }
+
+            return true;
         } else {
             LOG_ERROR("unknown flag: `%s`\n", flag);
             return false;

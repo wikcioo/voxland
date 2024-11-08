@@ -44,6 +44,10 @@
 Net_Stat net_stat;
 Memory_Stats mem_stats;
 
+bool client_show_fps_info = true;
+bool client_show_net_info = true;
+bool client_show_mem_info = true;
+
 LOCAL Game game = {};
 LOCAL Renderer2D *renderer2d = NULL;
 LOCAL i32 client_socket;
@@ -853,9 +857,15 @@ int main(int argc, char **argv)
         console_update(renderer2d, &game.ui_projection, game.current_window_width, game.current_window_height, delta_time);
 
         renderer2d_begin_scene(renderer2d, &game.ui_projection);
-        display_fps_info(delta_time);
-        display_net_info(delta_time);
-        display_mem_info(delta_time);
+        if (client_show_fps_info) {
+            display_fps_info(delta_time);
+        }
+        if (client_show_net_info) {
+            display_net_info(delta_time);
+        }
+        if (client_show_mem_info) {
+            display_mem_info(delta_time);
+        }
         renderer2d_end_scene(renderer2d);
 
         net_update(delta_time);
