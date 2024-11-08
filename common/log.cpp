@@ -45,6 +45,11 @@ void log_message(Log_Level level, const char *message, ...)
     fprintf(stream, "%s", full_message_buffer);
 
     // Append new log entry to the global log registry and generate event
+    if (!arena_allocator_can_allocate(&log_registry.allocator, strlen(formatted_message_buffer)+1)) {
+        fprintf(stderr, ERROR_COLOR "ran out of free space for logs in the registry\n" RESET_COLOR);
+        return;
+    }
+
     char *log_message = (char *) arena_allocator_allocate(&log_registry.allocator, strlen(formatted_message_buffer)+1);
     memcpy(log_message, formatted_message_buffer, strlen(formatted_message_buffer));
 

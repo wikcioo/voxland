@@ -81,6 +81,11 @@ void *arena_allocator_allocate_align(Arena_Allocator *allocator, u64 size, u64 a
     return ptr;
 }
 
+bool arena_allocator_can_allocate(Arena_Allocator *allocator, u64 size)
+{
+    return allocator->current_offset + size <= allocator->total_size;
+}
+
 void arena_allocator_free_all(Arena_Allocator *allocator)
 {
     ASSERT(allocator && allocator->memory);

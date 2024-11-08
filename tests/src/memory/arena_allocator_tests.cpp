@@ -89,6 +89,21 @@ u8 arena_allocator_allocate_all_space_and_free_all(void)
     return true;
 }
 
+u8 arena_allocator_check_available_memory(void)
+{
+    u64 arena_size = 10 * sizeof(u64);
+
+    Arena_Allocator allocator;
+    arena_allocator_create(arena_size, 0, &allocator);
+
+    arena_allocator_allocate(&allocator, 5 * sizeof(u64));
+
+    expect_false(arena_allocator_can_allocate(&allocator, 6 * sizeof(u64)));
+    expect_true(arena_allocator_can_allocate(&allocator, 5 * sizeof(u64)));
+
+    return true;
+}
+
 void arena_allocator_register_tests(void)
 {
     test_manager_register_test(arena_allocator_create_and_destroy, "arena allocator: create and destroy");
@@ -96,4 +111,5 @@ void arena_allocator_register_tests(void)
     test_manager_register_test(arena_allocator_multi_allocation_all_space, "arena allocator: multi allocation all space");
     test_manager_register_test(arena_allocator_over_allocate, "arena allocator: over allocate");
     test_manager_register_test(arena_allocator_allocate_all_space_and_free_all, "arena allocator: allocate all space and free all space");
+    test_manager_register_test(arena_allocator_check_available_memory, "arena allocator: check available memory");
 }
