@@ -4,10 +4,13 @@
 
 #include <GLFW/glfw3.h>
 
+#include "global.h"
 #include "client.h"
 #include "command_manager.h"
 #include "common/log.h"
+#include "common/size_unit.h"
 #include "common/memory/memutils.h"
+#include "common/collections/darray.h"
 
 // Used by cmd_help to automatically retrieve all available commands.
 extern Console_Command *cmds;
@@ -44,6 +47,12 @@ void cmd_register_all(void)
     strncpy(cmd.description, "manage which information is displayed on the screen", CONSOLE_CMD_MAX_DESCRIPTION_LEN);
     cmd.usage = cmd_showinfo_usage;
     cmd.handler = cmd_showinfo;
+    command_manager_register(cmd);
+
+    strncpy(cmd.name, "log_registry", CONSOLE_CMD_MAX_NAME_LEN);
+    strncpy(cmd.description, "get statistics of log registry", CONSOLE_CMD_MAX_DESCRIPTION_LEN);
+    cmd.usage = cmd_log_registry_usage;
+    cmd.handler = cmd_log_registry;
     command_manager_register(cmd);
 
     // NOTE: Always keep cmd_help as the last registered command.
@@ -139,6 +148,36 @@ bool cmd_showinfo(u32 argc, char **argv)
         LOG_ERROR("unknown showinfo argument `%s`\n", type);
         return false;
     }
+
+    return true;
+}
+
+void cmd_log_registry_usage(void)
+{
+    LOG_INFO("usage: log_registry\n");
+}
+
+bool cmd_log_registry(u32 argc, char **argv)
+{
+    UNUSED(argc); UNUSED(argv);
+
+    u64 num_logs = darray_length(global_data.lr->logs);
+    void *logs_memory = global_data.lr->allocator.memory;
+    u64 total_size_in_bytes = global_data.lr->allocator.total_size;
+    u64 used_size_in_bytes = global_data.lr->allocator.current_offset;
+
+    f32 total_formatted = 0.0f, used_formatted = 0.0f, remaining_formatted = 0.0f;
+    const char *total_unit = get_size_unit(total_size_in_bytes, &total_formatted);
+    const char *used_unit = get_size_unit(used_size_in_bytes, &used_formatted);
+    const char *remaining_unit = get_size_unit(total_size_in_bytes - used_size_in_bytes, &remaining_formatted);
+
+    LOG_INFO("log registry statistics:\n");
+    LOG_INFO("  number of log entries: %llu\n", num_logs);
+    LOG_INFO("  memory:\n");
+    LOG_INFO("    address: %p\n", logs_memory);
+    LOG_INFO("    total size: %.2f %s\n", total_formatted, total_unit);
+    LOG_INFO("    used size: %.2f %s\n", used_formatted, used_unit);
+    LOG_INFO("    remaining size: %.2f %s\n", remaining_formatted, remaining_unit);
 
     return true;
 }
