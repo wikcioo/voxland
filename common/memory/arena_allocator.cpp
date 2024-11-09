@@ -6,17 +6,22 @@
 #include "common/log.h"
 #include "common/asserts.h"
 #include "common/size_unit.h"
-#include "common/memory/memutils.h"
 
 void arena_allocator_create(u64 total_size, void *memory, Arena_Allocator *out_allocator)
+{
+    arena_allocator_create_tagged(total_size, memory, out_allocator, MEMORY_TAG_GENERIC_ARENA);
+}
+
+void arena_allocator_create_tagged(u64 total_size, void *memory, Arena_Allocator *out_allocator, Memory_Tag tag)
 {
     ASSERT(out_allocator);
 
     out_allocator->total_size = total_size;
     out_allocator->current_offset = 0;
+    out_allocator->tag = tag;
 
     if (memory == 0) {
-        out_allocator->memory = mem_alloc(total_size, MEMORY_TAG_ARENA_ALLOCATOR);
+        out_allocator->memory = mem_alloc(total_size, tag);
         out_allocator->is_memory_owner = true;
     } else {
         out_allocator->memory = memory;
@@ -29,7 +34,7 @@ void arena_allocator_destroy(Arena_Allocator *allocator)
     ASSERT(allocator && allocator->memory);
 
     if (allocator->is_memory_owner) {
-        mem_free(allocator->memory, allocator->total_size, MEMORY_TAG_ARENA_ALLOCATOR);
+        mem_free(allocator->memory, allocator->total_size, allocator->tag);
     }
 }
 

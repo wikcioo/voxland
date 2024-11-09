@@ -699,7 +699,7 @@ int main(int argc, char **argv)
 
     event_system_register(EVENT_CODE_APP_LOG, console_on_app_log_event);
 
-    arena_allocator_create(MiB(1), 0, &log_registry.allocator);
+    arena_allocator_create_tagged(MiB(1), 0, &log_registry.allocator, MEMORY_TAG_LOG);
     log_registry.logs = (Log_Entry *) darray_create(sizeof(Log_Entry));
 
     console_init();

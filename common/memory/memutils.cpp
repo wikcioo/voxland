@@ -9,17 +9,18 @@
 #include "common/size_unit.h"
 
 LOCAL const char *memory_tag_strings[MEMORY_TAG_COUNT] = {
-    "unknown    ",
-    "string     ",
-    "array      ",
-    "darray     ",
-    "arena_alloc",
-    "renderer2d ",
-    "game       ",
-    "opengl     ",
-    "ui         ",
-    "network    ",
-    "console    "
+    "unknown   ",
+    "string    ",
+    "array     ",
+    "darray    ",
+    "gen_arena ",
+    "renderer2d",
+    "game      ",
+    "opengl    ",
+    "ui        ",
+    "network   ",
+    "console   ",
+    "log       "
 };
 
 LOCAL Memory_Stats *stats;
