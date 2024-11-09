@@ -8,6 +8,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
+#include "client/global.h"
 #include "common/log.h"
 #include "common/packet.h"
 #include "common/clock.h"
@@ -20,35 +21,35 @@ void process_input(Game *game, f32 dt)
     PERSIST f32 velocity = 5.0f;
     f32 speed = dt * velocity;
 
-    glm::vec3 camera_right = glm::normalize(glm::cross(game->camera_direction, game->camera_up));
+    glm::vec3 camera_right = glm::normalize(glm::cross(game->global_data->camera_direction, game->global_data->camera_up));
 
-    if (game->keys_state[KEYCODE_W]) {
-        game->camera_position += game->camera_direction * speed;
-    } else if (game->keys_state[KEYCODE_S]) {
-        game->camera_position -= game->camera_direction * speed;
-    } else if (game->keys_state[KEYCODE_A]) {
-        game->camera_position -= camera_right * speed;
-    } else if (game->keys_state[KEYCODE_D]) {
-        game->camera_position += camera_right * speed;
+    if (game->global_data->keys_state[KEYCODE_W]) {
+        game->global_data->camera_position += game->global_data->camera_direction * speed;
+    } else if (game->global_data->keys_state[KEYCODE_S]) {
+        game->global_data->camera_position -= game->global_data->camera_direction * speed;
+    } else if (game->global_data->keys_state[KEYCODE_A]) {
+        game->global_data->camera_position -= camera_right * speed;
+    } else if (game->global_data->keys_state[KEYCODE_D]) {
+        game->global_data->camera_position += camera_right * speed;
     }
 
-    if (game->keys_state[KEYCODE_Up]) {
+    if (game->global_data->keys_state[KEYCODE_Up]) {
         game->self->position.z -= speed;
         game->player_moved = true;
-    } else if (game->keys_state[KEYCODE_Down]) {
+    } else if (game->global_data->keys_state[KEYCODE_Down]) {
         game->self->position.z += speed;
         game->player_moved = true;
-    } else if (game->keys_state[KEYCODE_Left]) {
+    } else if (game->global_data->keys_state[KEYCODE_Left]) {
         game->self->position.x -= speed;
         game->player_moved = true;
-    } else if (game->keys_state[KEYCODE_Right]) {
+    } else if (game->global_data->keys_state[KEYCODE_Right]) {
         game->self->position.x += speed;
         game->player_moved = true;
     }
 
     PERSIST f32 acc_updt = 0.0f;
     acc_updt += dt;
-    if (acc_updt >= game->client_update_period && game->player_moved) {
+    if (acc_updt >= game->global_data->client_update_period && game->player_moved) {
         game->player_moved = false;
         acc_updt = 0.0f;
 
@@ -56,7 +57,7 @@ void process_input(Game *game, f32 dt)
         packet.id = game->self->id;
         memcpy(packet.position, glm::value_ptr(game->self->position), 3 * sizeof(f32));
 
-        if (!packet_send(game->client_socket, PACKET_TYPE_PLAYER_MOVE, &packet)) {
+        if (!packet_send(game->global_data->client_socket, PACKET_TYPE_PLAYER_MOVE, &packet)) {
             LOG_ERROR("failed to send player move packet\n");
         }
     }
@@ -69,26 +70,14 @@ extern "C" {
 
 void game_post_reload(Game *game)
 {
-    net_init(game->ns);
-    mem_init(game->ms);
-    log_init(game->lr);
-    event_system_init(game->re);
+    net_init(game->global_data->ns);
+    mem_init(game->global_data->ms);
+    log_init(game->global_data->lr);
+    event_system_init(game->global_data->re);
 }
 
 void game_init(Game *game)
 {
-    game->current_window_width = WINDOW_WIDTH;
-    game->current_window_height = WINDOW_HEIGHT;
-    game->is_polygon_mode = false;
-    game->camera_position = glm::vec3(0.0f, 0.0f, 3.0f);
-    game->camera_direction = glm::vec3(0.0f, 0.0f, -1.0f);
-    game->camera_up = glm::vec3(0.0f, 1.0f, 0.0f);
-    game->camera_fov = 45.0f;
-    game->camera_pitch = 0.0f;
-    game->camera_yaw = -90.0f;
-    game->vao = 0;
-    game->vbo = 0;
-
     game_post_reload(game);
 
     bool shader_create_result;
@@ -218,13 +207,13 @@ void game_update(Game *game, f32 dt)
 {
     process_input(game, dt);
 
-    glm::mat4 projection = glm::perspective(glm::radians(game->camera_fov), (f32) game->current_window_width / (f32) game->current_window_height, 0.1f, 100.0f);
-    glm::mat4 view = glm::lookAt(game->camera_position, game->camera_position + game->camera_direction, game->camera_up);
+    glm::mat4 projection = glm::perspective(glm::radians(game->global_data->camera_fov), (f32) game->global_data->current_window_width / (f32) game->global_data->current_window_height, 0.1f, 100.0f);
+    glm::mat4 view = glm::lookAt(game->global_data->camera_position, game->global_data->camera_position + game->global_data->camera_direction, game->global_data->camera_up);
 
     shader_bind(&game->lighting_shader);
     shader_set_uniform_mat4(&game->lighting_shader, "u_projection", &projection);
     shader_set_uniform_mat4(&game->lighting_shader, "u_view", &view);
-    shader_set_uniform_vec3(&game->lighting_shader, "u_camera_pos", &game->camera_position);
+    shader_set_uniform_vec3(&game->lighting_shader, "u_camera_pos", &game->global_data->camera_position);
     glm::vec3 mat_specular = glm::vec3(0.5f);
     shader_set_uniform_vec3(&game->lighting_shader, "u_material.specular", &mat_specular);
     shader_set_uniform_float(&game->lighting_shader, "u_material.shininess", 32.0f);
@@ -257,7 +246,7 @@ void game_update(Game *game, f32 dt)
     shader_bind(&game->voxel_shader);
     shader_set_uniform_mat4(&game->voxel_shader, "u_projection", &projection);
     shader_set_uniform_mat4(&game->voxel_shader, "u_view", &view);
-    shader_set_uniform_vec3(&game->voxel_shader, "u_camera_pos", &game->camera_position);
+    shader_set_uniform_vec3(&game->voxel_shader, "u_camera_pos", &game->global_data->camera_position);
     glDrawArraysInstanced(GL_TRIANGLES, 0, 36, 100 * 100);
 
     shader_bind(&game->lighting_shader);
@@ -292,10 +281,10 @@ void game_update(Game *game, f32 dt)
         glDrawArrays(GL_TRIANGLES, 0, 36);
     }
 
-    renderer2d_begin_scene(game->renderer2d, &game->ui_projection);
-    renderer2d_draw_line(game->renderer2d, glm::vec2(-10.0f, 0.0f), glm::vec2(10.0f, 0.0f), glm::vec3(1.0f));
-    renderer2d_draw_line(game->renderer2d, glm::vec2(0.0f, -10.0f), glm::vec2(0.0f, 10.0f), glm::vec3(1.0f));
-    renderer2d_end_scene(game->renderer2d);
+    renderer2d_begin_scene(game->global_data->renderer2d, &game->global_data->ui_projection);
+    renderer2d_draw_line(game->global_data->renderer2d, glm::vec2(-10.0f, 0.0f), glm::vec2(10.0f, 0.0f), glm::vec3(1.0f));
+    renderer2d_draw_line(game->global_data->renderer2d, glm::vec2(0.0f, -10.0f), glm::vec2(0.0f, 10.0f), glm::vec3(1.0f));
+    renderer2d_end_scene(game->global_data->renderer2d);
 }
 
 void game_shutdown(Game *game)

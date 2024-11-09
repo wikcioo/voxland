@@ -18,6 +18,7 @@
 
 #include <glm/gtc/type_ptr.hpp>
 
+#include "global.h"
 #include "game.h"
 #include "client.h"
 #include "window.h"
@@ -458,8 +459,8 @@ LOCAL bool client_on_key_pressed_event(Event_Code code, Event_Data data)
         if (input_is_key_pressed(KEYCODE_LeftControl)) {
             ping_server();
         } else {
-            game.is_polygon_mode = !game.is_polygon_mode;
-            i32 mode = game.is_polygon_mode ? GL_LINE : GL_FILL;
+            global_data.is_polygon_mode = !global_data.is_polygon_mode;
+            i32 mode = global_data.is_polygon_mode ? GL_LINE : GL_FILL;
             glPolygonMode(GL_FRONT_AND_BACK, mode);
         }
         return true;
@@ -519,20 +520,20 @@ LOCAL bool client_on_mouse_moved_event(Event_Code code, Event_Data data)
     xoffset *= sensitivity;
     yoffset *= sensitivity;
 
-    game.camera_yaw += xoffset;
-    game.camera_pitch += yoffset;
+    global_data.camera_yaw += xoffset;
+    global_data.camera_pitch += yoffset;
 
-    if (game.camera_pitch > 89.0f) {
-        game.camera_pitch = 89.0f;
-    } else if (game.camera_pitch < -89.0f) {
-        game.camera_pitch = -89.0f;
+    if (global_data.camera_pitch > 89.0f) {
+        global_data.camera_pitch = 89.0f;
+    } else if (global_data.camera_pitch < -89.0f) {
+        global_data.camera_pitch = -89.0f;
     }
 
     glm::vec3 direction;
-    direction.x = glm::cos(glm::radians(game.camera_yaw)) * glm::cos(glm::radians(game.camera_pitch));
-    direction.y = glm::sin(glm::radians(game.camera_pitch));
-    direction.z = glm::sin(glm::radians(game.camera_yaw)) * glm::cos(glm::radians(game.camera_pitch));
-    game.camera_direction = glm::normalize(direction);
+    direction.x = glm::cos(glm::radians(global_data.camera_yaw)) * glm::cos(glm::radians(global_data.camera_pitch));
+    direction.y = glm::sin(glm::radians(global_data.camera_pitch));
+    direction.z = glm::sin(glm::radians(global_data.camera_yaw)) * glm::cos(glm::radians(global_data.camera_pitch));
+    global_data.camera_direction = glm::normalize(direction);
 
     return false;
 }
@@ -547,9 +548,9 @@ LOCAL bool client_on_window_resized_event(Event_Code code, Event_Data data)
     f32 left = -(f32) width / 2.0f, right = (f32) width / 2.0f;
     f32 bottom = -(f32) height / 2.0f, top = (f32) height / 2.0f;
 
-    game.ui_projection = glm::ortho(left, right, bottom, top);
-    game.current_window_width = width;
-    game.current_window_height = height;
+    global_data.ui_projection = glm::ortho(left, right, bottom, top);
+    global_data.current_window_width = width;
+    global_data.current_window_height = height;
 
     return false;
 }
@@ -568,7 +569,7 @@ LOCAL bool game_on_key_pressed_event(Event_Code code, Event_Data data)
     u16 key = data.U16[0];
     if (key == KEYCODE_W || key == KEYCODE_A || key == KEYCODE_S || key == KEYCODE_D ||
         key == KEYCODE_Up || key == KEYCODE_Left || key == KEYCODE_Down || key == KEYCODE_Right) {
-        game.keys_state[data.U16[0]] = true;
+        global_data.keys_state[data.U16[0]] = true;
         return true;
     }
 
@@ -582,7 +583,7 @@ LOCAL bool game_on_key_released_event(Event_Code code, Event_Data data)
     u16 key = data.U16[0];
     if (key == KEYCODE_W || key == KEYCODE_A || key == KEYCODE_S || key == KEYCODE_D ||
         key == KEYCODE_Up || key == KEYCODE_Left || key == KEYCODE_Down || key == KEYCODE_Right) {
-        game.keys_state[data.U16[0]] = false;
+        global_data.keys_state[data.U16[0]] = false;
         return true;
     }
 
@@ -611,8 +612,8 @@ LOCAL void display_fps_info(f32 dt)
     }
 
     glm::vec2 fps_info_position = glm::vec2(
-        (f32) game.current_window_width * 0.5f - (f32) strlen(fps_info) * font_width,
-        (f32) game.current_window_height * 0.5f - font_height
+        (f32) global_data.current_window_width * 0.5f - (f32) strlen(fps_info) * font_width,
+        (f32) global_data.current_window_height * 0.5f - font_height
     );
     renderer2d_draw_text(renderer2d, fps_info, fps_info_font_size, fps_info_position, glm::vec3(0.9f));
 }
@@ -642,7 +643,7 @@ LOCAL void display_net_info(f32 dt)
 
     glm::vec2 net_info_position = glm::vec2(
         -font_width * (f32) strlen(net_info) * 0.5f,
-        (f32) game.current_window_height * 0.5f - font_height
+        (f32) global_data.current_window_height * 0.5f - font_height
     );
     renderer2d_draw_text(renderer2d, net_info, net_info_font_size, net_info_position, glm::vec3(0.9f));
 }
@@ -665,8 +666,8 @@ LOCAL void display_mem_info(f32 dt)
     }
 
     glm::vec2 mem_info_position = glm::vec2(
-        (f32) game.current_window_width * -0.5f,
-        (f32) game.current_window_height * 0.5f - font_height
+        (f32) global_data.current_window_width * -0.5f,
+        (f32) global_data.current_window_height * 0.5f - font_height
     );
     renderer2d_draw_text(renderer2d, mem_info, mem_info_font_size, mem_info_position, glm::vec3(0.9f));
 }
@@ -784,6 +785,8 @@ int main(int argc, char **argv)
         exit(EXIT_FAILURE);
     }
 
+    game.global_data = &global_data;
+
     if (!reload_libgame()) {
         LOG_FATAL("failed to reload libgame\n");
         exit(EXIT_FAILURE);
@@ -797,7 +800,7 @@ int main(int argc, char **argv)
         LOG_FATAL("failed to create window\n");
         exit(EXIT_FAILURE);
     }
-    game.window = (GLFWwindow *) window_get_native_window();
+    global_data.window = (GLFWwindow *) window_get_native_window();
 
     running = true;
 
@@ -819,23 +822,32 @@ int main(int argc, char **argv)
     event_system_register(EVENT_CODE_WINDOW_RESIZED, client_on_window_resized_event);
     event_system_register(EVENT_CODE_WINDOW_CLOSED, client_on_window_closed_event);
 
-    game.ns = &net_stat;
-    game.ms = &mem_stats;
-    game.lr = &log_registry;
-    game.re = &registered_events;
+    global_data.ns = &net_stat;
+    global_data.ms = &mem_stats;
+    global_data.lr = &log_registry;
+    global_data.re = &registered_events;
+    global_data.current_window_width = WINDOW_WIDTH;
+    global_data.current_window_height = WINDOW_HEIGHT;
+    global_data.is_polygon_mode = false;
+    global_data.camera_position = glm::vec3(0.0f, 0.0f, 3.0f);
+    global_data.camera_direction = glm::vec3(0.0f, 0.0f, -1.0f);
+    global_data.camera_up = glm::vec3(0.0f, 1.0f, 0.0f);
+    global_data.camera_fov = 45.0f;
+    global_data.camera_pitch = 0.0f;
+    global_data.camera_yaw = -90.0f;
 
     renderer2d = renderer2d_create();
-    game.renderer2d = renderer2d;
+    global_data.renderer2d = renderer2d;
 
     f32 left = -(f32) WINDOW_WIDTH / 2.0f, right = (f32) WINDOW_WIDTH / 2.0f;
     f32 bottom = -(f32) WINDOW_HEIGHT / 2.0f, top = (f32) WINDOW_HEIGHT / 2.0f;
-    game.ui_projection = glm::ortho(left, right, bottom, top);
+    global_data.ui_projection = glm::ortho(left, right, bottom, top);
 
     game.self = (Player *) mem_alloc(sizeof(Player), MEMORY_TAG_GAME);
     memset(game.self, 0, sizeof(Player));
-    game.client_socket = client_socket;
-    game.client_update_freq = 60.0f;
-    game.client_update_period = 1.0f / game.client_update_freq;
+    global_data.client_socket = client_socket;
+    global_data.client_update_freq = 60.0f;
+    global_data.client_update_period = 1.0f / global_data.client_update_freq;
     game_init(&game);
 
     // Request to join
@@ -861,9 +873,9 @@ int main(int argc, char **argv)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         game_update(&game, delta_time);
-        console_update(renderer2d, &game.ui_projection, game.current_window_width, game.current_window_height, delta_time);
+        console_update(renderer2d, &global_data.ui_projection, global_data.current_window_width, global_data.current_window_height, delta_time);
 
-        renderer2d_begin_scene(renderer2d, &game.ui_projection);
+        renderer2d_begin_scene(renderer2d, &global_data.ui_projection);
         if (client_show_fps_info) {
             display_fps_info(delta_time);
         }
