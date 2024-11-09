@@ -1,5 +1,6 @@
 #include "commands.h"
 
+#include <errno.h>
 #include <string.h>
 
 #include <GLFW/glfw3.h>
@@ -53,6 +54,12 @@ void cmd_register_all(void)
     strncpy(cmd.description, "get statistics of log registry", CONSOLE_CMD_MAX_DESCRIPTION_LEN);
     cmd.usage = cmd_log_registry_usage;
     cmd.handler = cmd_log_registry;
+    command_manager_register(cmd);
+
+    strncpy(cmd.name, "camera", CONSOLE_CMD_MAX_NAME_LEN);
+    strncpy(cmd.description, "manage/retrieve camera related settings", CONSOLE_CMD_MAX_DESCRIPTION_LEN);
+    cmd.usage = cmd_camera_usage;
+    cmd.handler = cmd_camera;
     command_manager_register(cmd);
 
     // NOTE: Always keep cmd_help as the last registered command.
@@ -178,6 +185,79 @@ bool cmd_log_registry(u32 argc, char **argv)
     LOG_INFO("    total size: %.2f %s\n", total_formatted, total_unit);
     LOG_INFO("    used size: %.2f %s\n", used_formatted, used_unit);
     LOG_INFO("    remaining size: %.2f %s\n", remaining_formatted, remaining_unit);
+
+    return true;
+}
+
+void cmd_camera_usage(void)
+{
+    LOG_INFO("usage: camera [flags]\n");
+    LOG_INFO("  [flags] allowed values:\n");
+    LOG_INFO("    --speed-factor <factor:float>: set camera's speed factor to <factor>\n");
+    LOG_INFO("    --get-properties: display camera's properties\n");
+    LOG_INFO("    --reset-position: move camera to origin\n");
+}
+
+bool cmd_camera(u32 argc, char **argv)
+{
+    if (argc == 0) {
+        cmd_camera_usage();
+        LOG_INFO("no action taken\n");
+        return true;
+    }
+
+    while (argc > 0) {
+        const char *flag = shift(&argc, &argv);
+
+        if (strcmp(flag, "--speed-factor") == 0) {
+            if (argc == 0) {
+                LOG_ERROR("missing argument for flag `%s`\n", flag);
+                return false;
+            }
+
+            const char *factor_as_cstr = shift(&argc, &argv);
+
+            char *end_ptr;
+            errno = 0;
+            f32 factor = strtof(factor_as_cstr, &end_ptr);
+
+            if (end_ptr == factor_as_cstr) {
+                LOG_ERROR("could not convert `%s` to a valid factor (must be a floating point number)\n", factor_as_cstr);
+                return false;
+            } else if (errno == ERANGE) {
+                if (factor == HUGE_VALF) {
+                    LOG_ERROR("factor value `%s` overflows\n", factor_as_cstr);
+                } else if (factor == 0.0f) {
+                    LOG_ERROR("factor value `%s` underflows\n", factor_as_cstr);
+                }
+                return false;
+            } else if (*end_ptr != '\0') {
+                LOG_ERROR("trailing characters detected in `%s`\n", factor_as_cstr);
+                return false;
+            }
+
+            global_data.camera_speed_factor = factor;
+            LOG_INFO("camera speed factor set to `%f`\n", global_data.camera_speed_factor);
+        } else if (strcmp(flag, "--get-properties") == 0) {
+            glm::vec3 camera_up = glm::normalize(global_data.camera_up);
+            glm::vec3 camera_right = glm::normalize(glm::cross(global_data.camera_direction, global_data.camera_up));
+            LOG_INFO("camera properties:\n");
+            LOG_INFO("  position: { x: %f, y: %f, z: %f }\n", global_data.camera_position.x, global_data.camera_position.y, global_data.camera_position.z);
+            LOG_INFO("  direction: { x: %f, y: %f, z: %f }\n", global_data.camera_direction.x, global_data.camera_direction.y, global_data.camera_direction.z);
+            LOG_INFO("  up: { x: %f, y: %f, z: %f }\n", camera_up.x, camera_up.y, camera_up.z);
+            LOG_INFO("  right: { x: %f, y: %f, z: %f }\n", camera_right.x, camera_right.y, camera_right.z);
+            LOG_INFO("  fov: %f\n", global_data.camera_fov);
+            LOG_INFO("  pitch: %f\n", global_data.camera_pitch);
+            LOG_INFO("  yaw: %f\n", global_data.camera_yaw);
+            LOG_INFO("  speed factor: %f\n", global_data.camera_speed_factor);
+        } else if (strcmp(flag, "--reset-position") == 0) {
+            global_data.camera_position = glm::vec3(0.0f);
+            LOG_INFO("camera position set to { x: %f, y: %f, z: %f }\n", global_data.camera_position.x, global_data.camera_position.y, global_data.camera_position.z);
+        } else {
+            LOG_ERROR("unknown flag `%s`\n", flag);
+            return false;
+        }
+    }
 
     return true;
 }

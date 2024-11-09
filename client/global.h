@@ -32,6 +32,7 @@ typedef struct {
     f32 camera_fov;
     f32 camera_pitch;
     f32 camera_yaw;
+    f32 camera_speed_factor;
     i32 client_socket;
     f32 client_update_freq;
     f32 client_update_period;

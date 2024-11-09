@@ -18,32 +18,35 @@ const i32 num_instances = 100 * 100;
 
 void process_input(Game *game, f32 dt)
 {
-    PERSIST f32 velocity = 5.0f;
-    f32 speed = dt * velocity;
-
     glm::vec3 camera_right = glm::normalize(glm::cross(game->global_data->camera_direction, game->global_data->camera_up));
 
+    PERSIST f32 camera_velocity = 5.0f;
+    f32 camera_speed = dt * camera_velocity * game->global_data->camera_speed_factor;
+
     if (game->global_data->keys_state[KEYCODE_W]) {
-        game->global_data->camera_position += game->global_data->camera_direction * speed;
+        game->global_data->camera_position += game->global_data->camera_direction * camera_speed;
     } else if (game->global_data->keys_state[KEYCODE_S]) {
-        game->global_data->camera_position -= game->global_data->camera_direction * speed;
+        game->global_data->camera_position -= game->global_data->camera_direction * camera_speed;
     } else if (game->global_data->keys_state[KEYCODE_A]) {
-        game->global_data->camera_position -= camera_right * speed;
+        game->global_data->camera_position -= camera_right * camera_speed;
     } else if (game->global_data->keys_state[KEYCODE_D]) {
-        game->global_data->camera_position += camera_right * speed;
+        game->global_data->camera_position += camera_right * camera_speed;
     }
 
+    PERSIST f32 player_velocity = 5.0f;
+    f32 player_speed = dt * player_velocity;
+
     if (game->global_data->keys_state[KEYCODE_Up]) {
-        game->self->position.z -= speed;
+        game->self->position.z -= player_speed;
         game->player_moved = true;
     } else if (game->global_data->keys_state[KEYCODE_Down]) {
-        game->self->position.z += speed;
+        game->self->position.z += player_speed;
         game->player_moved = true;
     } else if (game->global_data->keys_state[KEYCODE_Left]) {
-        game->self->position.x -= speed;
+        game->self->position.x -= player_speed;
         game->player_moved = true;
     } else if (game->global_data->keys_state[KEYCODE_Right]) {
-        game->self->position.x += speed;
+        game->self->position.x += player_speed;
         game->player_moved = true;
     }
 

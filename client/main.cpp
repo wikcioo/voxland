@@ -835,6 +835,7 @@ int main(int argc, char **argv)
     global_data.camera_fov = 45.0f;
     global_data.camera_pitch = 0.0f;
     global_data.camera_yaw = -90.0f;
+    global_data.camera_speed_factor = 1.0f;
 
     renderer2d = renderer2d_create();
     global_data.renderer2d = renderer2d;
