@@ -6,7 +6,9 @@
 
 #include "client/renderer2d.h"
 #include "client/input_codes.h"
+#include "common/log.h"
 #include "common/net.h"
+#include "common/event.h"
 #include "common/defines.h"
 #include "common/player_types.h"
 #include "common/entity_types.h"
@@ -25,6 +27,8 @@ typedef struct {
 typedef struct {
     Net_Stat *ns;
     Memory_Stats *ms;
+    Log_Registry *lr;
+    Registered_Event (*re)[NUM_OF_EVENT_CODES];
     GLFWwindow *window;
     u32 current_window_width;
     u32 current_window_height;
@@ -52,11 +56,13 @@ typedef struct {
     bool keys_state[KEYCODE_Last];
 } Game;
 
+typedef void (*pfn_game_post_reload)(Game *game);
 typedef void (*pfn_game_init)(Game *game);
 typedef void (*pfn_game_update)(Game *game, f32 dt);
 typedef void (*pfn_game_shutdown)(Game *game);
 
 #define LIST_OF_GAME_HRFN \
+    X(game_post_reload) \
     X(game_init) \
     X(game_update) \
     X(game_shutdown)

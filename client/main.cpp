@@ -43,6 +43,8 @@
 
 Net_Stat net_stat;
 Memory_Stats mem_stats;
+Log_Registry log_registry;
+Registered_Event registered_events[NUM_OF_EVENT_CODES];
 
 bool client_show_fps_info = true;
 bool client_show_net_info = true;
@@ -85,6 +87,8 @@ bool reload_libgame(void)
         }
     LIST_OF_GAME_HRFN
     #undef X
+
+    game_post_reload(&game);
 
     return true;
 }
@@ -685,8 +689,9 @@ int main(int argc, char **argv)
 {
     net_init(&net_stat);
     mem_init(&mem_stats);
+    log_init(&log_registry);
 
-    if (!event_system_init()) {
+    if (!event_system_init(&registered_events)) {
         LOG_FATAL("failed to initialize event system\n");
         exit(EXIT_FAILURE);
     }
@@ -816,6 +821,8 @@ int main(int argc, char **argv)
 
     game.ns = &net_stat;
     game.ms = &mem_stats;
+    game.lr = &log_registry;
+    game.re = &registered_events;
 
     renderer2d = renderer2d_create();
     game.renderer2d = renderer2d;

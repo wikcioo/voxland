@@ -67,6 +67,14 @@ void process_input(Game *game, f32 dt)
 // in order to retrieve functions by name using dlsym
 extern "C" {
 
+void game_post_reload(Game *game)
+{
+    net_init(game->ns);
+    mem_init(game->ms);
+    log_init(game->lr);
+    event_system_init(game->re);
+}
+
 void game_init(Game *game)
 {
     game->current_window_width = WINDOW_WIDTH;
@@ -81,8 +89,7 @@ void game_init(Game *game)
     game->vao = 0;
     game->vbo = 0;
 
-    net_init(game->ns);
-    mem_init(game->ms);
+    game_post_reload(game);
 
     bool shader_create_result;
     UNUSED(shader_create_result);

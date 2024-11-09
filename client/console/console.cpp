@@ -69,6 +69,8 @@ LOCAL bool console_exec_from_input(void);
 LOCAL void console_handle_backspace();
 LOCAL bool console_process_key(u16 key);
 
+extern Log_Registry log_registry;
+
 void console_init(void)
 {
     console.font_size = FA16;

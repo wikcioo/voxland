@@ -68,7 +68,11 @@ typedef struct {
 
 typedef bool (*pfn_event_callback)(Event_Code code, Event_Data data);
 
-bool event_system_init(void);
+typedef struct {
+    pfn_event_callback *callbacks;
+} Registered_Event;
+
+bool event_system_init(Registered_Event (*re)[NUM_OF_EVENT_CODES]);
 void event_system_shutdown(void);
 
 void event_system_register(Event_Code code, pfn_event_callback callback);

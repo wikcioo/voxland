@@ -49,6 +49,8 @@ typedef struct {
 
 Net_Stat net_stat;
 Memory_Stats mem_stats;
+Log_Registry log_registry;
+Registered_Event registered_events[NUM_OF_EVENT_CODES];
 
 LOCAL bool running;
 LOCAL i32 server_socket;
@@ -783,8 +785,9 @@ int main(int argc, char **argv)
 {
     net_init(&net_stat);
     mem_init(&mem_stats);
+    log_init(&log_registry);
 
-    if (!event_system_init()) {
+    if (!event_system_init(&registered_events)) {
         LOG_FATAL("failed to initialize event system\n");
         exit(EXIT_FAILURE);
     }

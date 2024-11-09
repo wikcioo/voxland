@@ -64,8 +64,7 @@ typedef struct {
     Log_Entry *logs; // darray
 } Log_Registry;
 
-extern Log_Registry log_registry;
-
+void log_init(Log_Registry *lr);
 void log_message(Log_Level level, const char *message, ...);
 
 #if ENABLE_TRACE_LOG
