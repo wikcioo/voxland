@@ -4,6 +4,7 @@
 
 #include "client/global.h"
 #include "client/shader.h"
+#include "client/skybox.h"
 #include "common/defines.h"
 #include "common/player_types.h"
 #include "common/entity_types.h"
@@ -29,6 +30,7 @@ typedef struct {
     Light light;
     Player *players; // uthash
     Player *self;
+    Skybox *skybox;
 } Game;
 
 typedef void (*pfn_game_post_reload)(Game *game);

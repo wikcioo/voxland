@@ -110,6 +110,21 @@ void game_init(Game *game)
     shader_create_result = shader_create(&voxel_shader_create_info, &game->voxel_shader);
     ASSERT(shader_create_result);
 
+    bool skybox_create_result;
+    UNUSED(skybox_create_result);
+
+    game->skybox = (Skybox *) mem_alloc(sizeof(Skybox), MEMORY_TAG_GAME);
+
+    Skybox_Create_Info skybox_create_info = {
+        .debug = true,
+        .face_filepaths = {
+            "assets/textures/prototypes/texture_06.png",
+        }
+    };
+
+    skybox_create_result = skybox_create(&skybox_create_info, game->skybox);
+    ASSERT(skybox_create_result);
+
     f32 vertices[] = {
         -0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
          0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
@@ -213,6 +228,8 @@ void game_update(Game *game, f32 dt)
     glm::mat4 projection = glm::perspective(glm::radians(game->global_data->camera_fov), (f32) game->global_data->current_window_width / (f32) game->global_data->current_window_height, 0.1f, 100.0f);
     glm::mat4 view = glm::lookAt(game->global_data->camera_position, game->global_data->camera_position + game->global_data->camera_direction, game->global_data->camera_up);
 
+    skybox_render(game->skybox, &projection, &view);
+
     shader_bind(&game->lighting_shader);
     shader_set_uniform_mat4(&game->lighting_shader, "u_projection", &projection);
     shader_set_uniform_mat4(&game->lighting_shader, "u_view", &view);
@@ -299,6 +316,8 @@ void game_shutdown(Game *game)
     glDeleteBuffers(1, &game->vbo);
     glDeleteBuffers(1, &game->inst_vbo);
     mem_free(game->voxel_data, num_instances * sizeof(Voxel_Data), MEMORY_TAG_GAME);
+    skybox_destroy(game->skybox);
+    mem_free(game->skybox, sizeof(Skybox), MEMORY_TAG_GAME);
 }
 
 } // extern "C"

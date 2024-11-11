@@ -69,7 +69,7 @@ $(BUILD_DIR)/client/%.cpp.o: client/%.cpp
 $(BUILD_DIR)/client/%.cpp.o: client/console/%.cpp
 	$(CXX) -c $< $(CLIENT_INCS) $(CXXFLAGS) -fPIC -o $@
 
-$(BUILD_DIR)/client/lib/lib%.so: client/lib/%.cpp $(COMMON_OBJECTS) $(BUILD_DIR)/client/renderer2d.cpp.o $(BUILD_DIR)/client/shader.cpp.o $(BUILD_DIR)/client/texture.cpp.o $(BUILD_DIR)/client/global.cpp.o
+$(BUILD_DIR)/client/lib/lib%.so: client/lib/%.cpp $(COMMON_OBJECTS) $(BUILD_DIR)/client/renderer2d.cpp.o $(BUILD_DIR)/client/shader.cpp.o $(BUILD_DIR)/client/texture.cpp.o $(BUILD_DIR)/client/global.cpp.o $(BUILD_DIR)/client/skybox.cpp.o
 	$(CXX) $(CLIENT_SO_INCS) $(CXXFLAGS) -shared -fPIC $^ -o $@
 
 # Server targets
