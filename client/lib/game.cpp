@@ -228,7 +228,9 @@ void game_update(Game *game, f32 dt)
     glm::mat4 projection = glm::perspective(glm::radians(game->global_data->camera_fov), (f32) game->global_data->current_window_width / (f32) game->global_data->current_window_height, 0.1f, 100.0f);
     glm::mat4 view = glm::lookAt(game->global_data->camera_position, game->global_data->camera_position + game->global_data->camera_direction, game->global_data->camera_up);
 
-    skybox_render(game->skybox, &projection, &view);
+    if (game->global_data->skybox_visible) {
+        skybox_render(game->skybox, &projection, &view);
+    }
 
     shader_bind(&game->lighting_shader);
     shader_set_uniform_mat4(&game->lighting_shader, "u_projection", &projection);

@@ -62,6 +62,12 @@ void cmd_register_all(void)
     cmd.handler = cmd_camera;
     command_manager_register(cmd);
 
+    strncpy(cmd.name, "skybox", CONSOLE_CMD_MAX_NAME_LEN);
+    strncpy(cmd.description, "turn on/off skybox rendering", CONSOLE_CMD_MAX_DESCRIPTION_LEN);
+    cmd.usage = cmd_skybox_usage;
+    cmd.handler = cmd_skybox;
+    command_manager_register(cmd);
+
     // NOTE: Always keep cmd_help as the last registered command.
     strncpy(cmd.name, "help", CONSOLE_CMD_MAX_NAME_LEN);
     strncpy(cmd.description, "display available commands", CONSOLE_CMD_MAX_DESCRIPTION_LEN);
@@ -260,4 +266,33 @@ bool cmd_camera(u32 argc, char **argv)
     }
 
     return true;
+}
+
+void cmd_skybox_usage(void)
+{
+    LOG_INFO("usage: skybox <state>\n");
+    LOG_INFO("  <state> allowed values: on, off\n");
+}
+
+bool cmd_skybox(u32 argc, char **argv)
+{
+    if (argc == 0) {
+        cmd_skybox_usage();
+        LOG_ERROR("missing argument\n");
+        return false;
+    }
+
+    const char *state = shift(&argc, &argv);
+    if (strcmp(state, "on") == 0) {
+        global_data.skybox_visible = true;
+        LOG_INFO("turned on skybox rendering\n");
+        return true;
+    } else if (strcmp(state, "off") == 0) {
+        global_data.skybox_visible = false;
+        LOG_INFO("turned off skybox rendering\n");
+        return true;
+    }
+
+    LOG_ERROR("unknown skybox argument `%s`\n", state);
+    return false;
 }

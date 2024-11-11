@@ -38,6 +38,7 @@ typedef struct {
     f32 client_update_period;
     Renderer2D *renderer2d;
     bool keys_state[KEYCODE_Last];
+    bool skybox_visible;
 } Global_Data;
 
 extern Global_Data global_data;
