@@ -232,6 +232,7 @@ void renderer2d_destroy(Renderer2D *renderer2d)
 void renderer2d_begin_scene(Renderer2D *renderer2d, const glm::mat4 *projection)
 {
     glDisable(GL_DEPTH_TEST);
+    glDisable(GL_CULL_FACE);
 
     // TODO: replace with uniform buffer
     shader_bind(&renderer2d->quad_shader);
@@ -253,6 +254,7 @@ void renderer2d_end_scene(Renderer2D *renderer2d)
 {
     flush(renderer2d);
     glEnable(GL_DEPTH_TEST);
+    glEnable(GL_CULL_FACE);
 }
 
 void renderer2d_reset_stats(Renderer2D *renderer2d)
