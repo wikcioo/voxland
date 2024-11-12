@@ -94,7 +94,7 @@ bool reload_libgame(void)
     return true;
 }
 
-LOCAL void ping_server(void)
+void ping_server(void)
 {
     ASSERT(client_socket > 2);
 

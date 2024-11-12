@@ -16,3 +16,5 @@ void cmd_camera_usage(void);
 bool cmd_camera(u32 argc, char **argv);
 void cmd_skybox_usage(void);
 bool cmd_skybox(u32 argc, char **argv);
+void cmd_ping_usage(void);
+bool cmd_ping(u32 argc, char **argv);

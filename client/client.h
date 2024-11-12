@@ -5,3 +5,4 @@ extern bool client_show_net_info;
 extern bool client_show_mem_info;
 
 bool reload_libgame(void);
+void ping_server(void);
