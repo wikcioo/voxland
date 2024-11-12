@@ -75,6 +75,12 @@ void cmd_register_all(void)
     cmd.handler = cmd_ping;
     command_manager_register(cmd);
 
+    strncpy(cmd.name, "wireframe", CONSOLE_CMD_MAX_NAME_LEN);
+    strncpy(cmd.description, "turn on/off wireframe mode for rendering", CONSOLE_CMD_MAX_DESCRIPTION_LEN);
+    cmd.usage = cmd_wireframe_usage;
+    cmd.handler = cmd_wireframe;
+    command_manager_register(cmd);
+
     // NOTE: Always keep cmd_help as the last registered command.
     strncpy(cmd.name, "help", CONSOLE_CMD_MAX_NAME_LEN);
     strncpy(cmd.description, "display available commands", CONSOLE_CMD_MAX_DESCRIPTION_LEN);
@@ -463,4 +469,35 @@ bool cmd_ping(u32 argc, char **argv)
     }
 
     return init_ping_task(conf);
+}
+
+void cmd_wireframe_usage(void)
+{
+    LOG_INFO("usage: wireframe <state>\n");
+    LOG_INFO("  <state> allowed values: on, off\n");
+}
+
+bool cmd_wireframe(u32 argc, char **argv)
+{
+    if (argc == 0) {
+        cmd_wireframe_usage();
+        LOG_ERROR("missing argument\n");
+        return false;
+    }
+
+    const char *state = shift(&argc, &argv);
+    if (strcmp(state, "on") == 0) {
+        global_data.is_polygon_mode = true;
+        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+        LOG_INFO("turned on wireframe mode\n");
+        return true;
+    } else if (strcmp(state, "off") == 0) {
+        global_data.is_polygon_mode = false;
+        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+        LOG_INFO("turned off wireframe mode\n");
+        return true;
+    }
+
+    LOG_ERROR("unknown wireframe argument `%s`\n", state);
+    return false;
 }
