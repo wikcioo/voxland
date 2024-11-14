@@ -68,6 +68,7 @@ void cmd_register_all(void)
     strncpy(cmd.description, "turn on/off skybox rendering", CONSOLE_CMD_MAX_DESCRIPTION_LEN);
     cmd.usage = cmd_skybox_usage;
     cmd.handler = cmd_skybox;
+    command_manager_register(cmd);
 
     strncpy(cmd.name, "ping", CONSOLE_CMD_MAX_NAME_LEN);
     strncpy(cmd.description, "send ping packets to the server", CONSOLE_CMD_MAX_DESCRIPTION_LEN);
