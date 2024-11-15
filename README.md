@@ -34,3 +34,6 @@ $ ./build/[debug,release]/server/server -p <port>
 ```shell
 $ ./build/[debug,release]/client/client -ip <ip address> -p <port> --username <username> --password <password>
 ```
+
+# Screenshots
+![voxland_client_15-11-2024](docs/screenshots/voxland_client_15-11-2024.png)
