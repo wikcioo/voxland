@@ -88,13 +88,18 @@ char* memory_usage_as_cstr(void)
 
     char buffer[1024] = "memory usage\n";
     u64 offset = strlen(buffer);
+    u64 total = 0;
     for (i32 i = 0; i < MEMORY_TAG_COUNT; i++) {
         f32 usage;
         const char *unit = get_size_unit(stats->tagged_allocations[i], &usage);
-        i32 length = snprintf(buffer + offset, 1024 - offset, "  %s: %.02f %s%c",
-                              memory_tag_strings[i], usage, unit, i < MEMORY_TAG_COUNT-1 ? '\n' : ' ');
+        i32 length = snprintf(buffer + offset, 1024 - offset, "  %s: %.02f %s\n", memory_tag_strings[i], usage, unit);
         offset += length;
+        total += stats->tagged_allocations[i];
     }
+
+    f32 total_formatted = 0.0f;
+    const char *unit = get_size_unit(total, &total_formatted);
+    snprintf(buffer + offset, 1024 - offset, "  TOTAL     : %.02f %s", total_formatted, unit);
 
     // TODO: Replace with arena allocator.
     return strdup(buffer);
