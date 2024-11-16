@@ -20,10 +20,12 @@ typedef struct {
     Global_Data *global_data;
     bool player_moved;
     u32 vao, vbo, inst_vbo;
+    u32 omni_depth_map_fbo, omni_depth_map_texture_id;
     Voxel_Data *voxel_data;
     Shader flat_color_shader;
     Shader lighting_shader;
     Shader voxel_shader;
+    Shader shadow_shader;
     Light light;
     Player *players; // uthash
     Player *self;

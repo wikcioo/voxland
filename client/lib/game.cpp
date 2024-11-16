@@ -15,6 +15,11 @@
 #include "common/clock.h"
 #include "common/asserts.h"
 
+#define CUBE_MAP_NUM_FACES 6
+
+#define SHADOW_WIDTH 2048
+#define SHADOW_HEIGHT 2048
+
 const i32 num_instances = 100 * 100;
 
 void process_input(Game *game, f32 dt)
@@ -115,6 +120,15 @@ void game_init(Game *game)
     shader_create_result = shader_create(&voxel_shader_create_info, &game->voxel_shader);
     ASSERT(shader_create_result);
 
+    Shader_Create_Info shadow_shader_create_info = {
+        .vertex_filepath = "assets/shaders/omni_shadow_map.vert",
+        .geometry_filepath = "assets/shaders/omni_shadow_map.geom",
+        .fragment_filepath = "assets/shaders/omni_shadow_map.frag"
+    };
+
+    shader_create_result = shader_create(&shadow_shader_create_info, &game->shadow_shader);
+    ASSERT(shader_create_result);
+
     f32 vertices[] = {
         -0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
          0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
@@ -208,6 +222,30 @@ void game_init(Game *game)
     glBindVertexArray(0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
+    glGenTextures(1, &game->omni_depth_map_texture_id);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, game->omni_depth_map_texture_id);
+    for (u32 i = 0; i < CUBE_MAP_NUM_FACES; i++) {
+        glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_DEPTH_COMPONENT, SHADOW_WIDTH, SHADOW_HEIGHT, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+    }
+
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+
+    glGenFramebuffers(1, &game->omni_depth_map_fbo);
+    glBindFramebuffer(GL_FRAMEBUFFER, game->omni_depth_map_fbo);
+    glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, game->omni_depth_map_texture_id, 0);
+    glDrawBuffer(GL_NONE);
+    glReadBuffer(GL_NONE);
+
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+        LOG_ERROR("framebuffer is not complete\n");
+    }
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_CULL_FACE);
     glCullFace(GL_BACK);
@@ -221,18 +259,6 @@ void game_update(Game *game, f32 dt)
     glm::mat4 projection = glm::perspective(glm::radians(game->global_data->camera_fov), (f32) game->global_data->current_window_width / (f32) game->global_data->current_window_height, 0.1f, 100.0f);
     glm::mat4 view = glm::lookAt(game->global_data->camera_position, game->global_data->camera_position + game->global_data->camera_direction, game->global_data->camera_up);
 
-    if (game->global_data->skybox_visible) {
-        skybox_render(game->skybox, &projection, &view);
-    }
-
-    shader_bind(&game->lighting_shader);
-    shader_set_uniform_mat4(&game->lighting_shader, "u_projection", &projection);
-    shader_set_uniform_mat4(&game->lighting_shader, "u_view", &view);
-    shader_set_uniform_vec3(&game->lighting_shader, "u_camera_pos", &game->global_data->camera_position);
-    glm::vec3 mat_specular = glm::vec3(0.5f);
-    shader_set_uniform_vec3(&game->lighting_shader, "u_material.specular", &mat_specular);
-    shader_set_uniform_float(&game->lighting_shader, "u_material.shininess", 32.0f);
-
     glm::vec3 current_light_position = {};
     if (game->light.id != 0) {
         f32 t = clock_get_absolute_time_sec();
@@ -241,7 +267,55 @@ void game_update(Game *game, f32 dt)
             game->light.initial_position.y,
             game->light.initial_position.z + glm::sin(game->light.angular_velocity * t) * game->light.radius
         );
+    }
 
+    // First pass. Render to depth map.
+    PERSIST f32 light_aspect = (f32) SHADOW_WIDTH / (f32) SHADOW_HEIGHT;
+    PERSIST f32 light_near_plane = 0.1f;
+    PERSIST f32 light_far_plane = 100.0f;
+    PERSIST glm::mat4 light_projection = glm::perspective(glm::radians(90.0f), light_aspect, light_near_plane, light_far_plane);
+    glm::mat4 light_space_transforms[CUBE_MAP_NUM_FACES] = {
+        light_projection * glm::lookAt(current_light_position, current_light_position + glm::vec3(1.0f, 0.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f)),
+        light_projection * glm::lookAt(current_light_position, current_light_position + glm::vec3(-1.0f, 0.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f)),
+        light_projection * glm::lookAt(current_light_position, current_light_position + glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f)),
+        light_projection * glm::lookAt(current_light_position, current_light_position + glm::vec3(0.0f, -1.0f, 0.0f), glm::vec3(0.0f, 0.0f, -1.0f)),
+        light_projection * glm::lookAt(current_light_position, current_light_position + glm::vec3(0.0f, 0.0f, 1.0f), glm::vec3(0.0f, -1.0f, 0.0f)),
+        light_projection * glm::lookAt(current_light_position, current_light_position + glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(0.0f, -1.0f, 0.0f))
+    };
+
+    glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
+    glBindFramebuffer(GL_FRAMEBUFFER, game->omni_depth_map_fbo);
+    glClear(GL_DEPTH_BUFFER_BIT);
+
+    glBindVertexArray(game->vao);
+    shader_bind(&game->shadow_shader);
+    shader_set_uniform_vec3(&game->shadow_shader, "u_light_pos", &current_light_position);
+    shader_set_uniform_float(&game->shadow_shader, "u_far_plane", light_far_plane);
+    shader_set_uniform_mat4_array(&game->shadow_shader, "u_shadow_transforms", (const glm::mat4 *) &light_space_transforms, CUBE_MAP_NUM_FACES);
+
+    for (Player *player = game->players; player != NULL; player = (Player *) player->hh.next) {
+        glm::mat4 model = glm::translate(glm::mat4(1.0f), player->position);
+        shader_set_uniform_mat4(&game->shadow_shader, "u_model", &model);
+        glDrawArrays(GL_TRIANGLES, 0, 36);
+    }
+
+    {
+        glm::mat4 model = glm::translate(glm::mat4(1.0f), game->self->position);
+        shader_set_uniform_mat4(&game->shadow_shader, "u_model", &model);
+        glDrawArrays(GL_TRIANGLES, 0, 36);
+    }
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+    // Second pass. Render the scene.
+    glViewport(0, 0, game->global_data->current_window_width, game->global_data->current_window_height);
+    glClear(GL_DEPTH_BUFFER_BIT);
+
+    if (game->global_data->skybox_visible) {
+        skybox_render(game->skybox, &projection, &view);
+    }
+
+    if (game->light.id != 0) {
         shader_bind(&game->lighting_shader);
         shader_set_uniform_vec3(&game->lighting_shader, "u_light.position", &current_light_position);
         shader_set_uniform_vec3(&game->lighting_shader, "u_light.ambient", &game->light.ambient);
@@ -262,9 +336,24 @@ void game_update(Game *game, f32 dt)
     shader_set_uniform_mat4(&game->voxel_shader, "u_projection", &projection);
     shader_set_uniform_mat4(&game->voxel_shader, "u_view", &view);
     shader_set_uniform_vec3(&game->voxel_shader, "u_camera_pos", &game->global_data->camera_position);
-    glDrawArraysInstanced(GL_TRIANGLES, 0, 36, 100 * 100);
+    shader_set_uniform_int(&game->voxel_shader, "u_shadow_map", 0);
+    shader_set_uniform_float(&game->voxel_shader, "u_far_plane", light_far_plane);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, game->omni_depth_map_texture_id);
+    glDrawArraysInstanced(GL_TRIANGLES, 0, 36, num_instances);
 
     shader_bind(&game->lighting_shader);
+    shader_set_uniform_mat4(&game->lighting_shader, "u_projection", &projection);
+    shader_set_uniform_mat4(&game->lighting_shader, "u_view", &view);
+    shader_set_uniform_vec3(&game->lighting_shader, "u_camera_pos", &game->global_data->camera_position);
+    shader_set_uniform_int(&game->lighting_shader, "u_shadow_map", 0);
+    shader_set_uniform_float(&game->lighting_shader, "u_far_plane", light_far_plane);
+    glm::vec3 mat_specular = glm::vec3(0.5f);
+    shader_set_uniform_vec3(&game->lighting_shader, "u_material.specular", &mat_specular);
+    shader_set_uniform_float(&game->lighting_shader, "u_material.shininess", 32.0f);
+    shader_set_uniform_int(&game->lighting_shader, "u_shadow_map", 0);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, game->omni_depth_map_texture_id);
 
     // Render players
     for (Player *player = game->players; player != NULL; player = (Player *) player->hh.next) {
@@ -307,9 +396,12 @@ void game_shutdown(Game *game)
     shader_destroy(&game->flat_color_shader);
     shader_destroy(&game->lighting_shader);
     shader_destroy(&game->voxel_shader);
+    shader_destroy(&game->shadow_shader);
+    glDeleteFramebuffers(1, &game->omni_depth_map_fbo);
     glDeleteVertexArrays(1, &game->vao);
     glDeleteBuffers(1, &game->vbo);
     glDeleteBuffers(1, &game->inst_vbo);
+    glDeleteTextures(1, &game->omni_depth_map_texture_id);
     mem_free(game->voxel_data, num_instances * sizeof(Voxel_Data), MEMORY_TAG_GAME);
     skybox_destroy(game->skybox);
     mem_free(game->skybox, sizeof(Skybox), MEMORY_TAG_GAME);
