@@ -21,7 +21,8 @@ LOCAL const char *memory_tag_strings[MEMORY_TAG_COUNT] = {
     "ui        ",
     "network   ",
     "console   ",
-    "log       "
+    "log       ",
+    "job       "
 };
 
 LOCAL Memory_Stats *stats;

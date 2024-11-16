@@ -16,6 +16,7 @@ typedef enum {
     MEMORY_TAG_NETWORK,
     MEMORY_TAG_CONSOLE,
     MEMORY_TAG_LOG,
+    MEMORY_TAG_JOB,
     MEMORY_TAG_COUNT
 } Memory_Tag;
 
