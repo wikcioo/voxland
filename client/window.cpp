@@ -135,6 +135,7 @@ void window_destroy(void)
 {
     glfwDestroyWindow(main_window);
     glfwTerminate();
+    LOG_INFO("window destroyed successfully\n");
 }
 
 void window_poll_events(void)

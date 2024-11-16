@@ -94,11 +94,7 @@ void report_assertion_failure(const char *expression, const char *message, const
              with_msg ? "\"" : "",
              file, line);
 
-#if ENABLE_FATAL_LOG
-    LOG_FATAL("%s", formatted_report);
-#else
     fprintf(stderr, "%s", formatted_report);
-#endif
 }
 
 void report_expect_failure(const char *message, ...)

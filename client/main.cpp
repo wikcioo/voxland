@@ -28,6 +28,7 @@
 #include "console/console.h"
 #include "common/net.h"
 #include "common/log.h"
+#include "common/job.h"
 #include "common/asserts.h"
 #include "common/defines.h"
 #include "common/hexdump.h"
@@ -46,6 +47,7 @@ Net_Stat net_stat;
 Memory_Stats mem_stats;
 Log_Registry log_registry;
 Registered_Event registered_events[NUM_OF_EVENT_CODES];
+Job_System job_system;
 
 bool client_show_fps_info = true;
 bool client_show_net_info = true;
@@ -67,7 +69,9 @@ LIST_OF_GAME_HRFN
 
 bool reload_libgame(void)
 {
+    LOCAL bool first_time_load = true;
     if (libgame != NULL) {
+        first_time_load = false;
         if (dlclose(libgame) != 0) {
             LOG_ERROR("error closing shared object: %s\n", dlerror());
             return false;
@@ -89,7 +93,9 @@ bool reload_libgame(void)
     LIST_OF_GAME_HRFN
     #undef X
 
-    game_post_reload(&game);
+    if (!first_time_load) {
+        game_post_reload(&game);
+    }
 
     return true;
 }
@@ -246,8 +252,7 @@ LOCAL void handle_incoming_server_data(void)
     if (bytes_read <= 0) {
         if (bytes_read == 0) {
             LOG_INFO("orderly shutdown: disconnected from server\n");
-            close(client_socket);
-            exit(EXIT_FAILURE);
+            running = false;
         } else if (bytes_read == -1) {
             LOG_ERROR("recv error: %s\n", strerror(errno));
         }
@@ -449,6 +454,27 @@ LOCAL bool connect_to_server(const char *ip_addr, const char *port)
     return true;
 }
 
+LOCAL bool fake_job_entry_point(void *param_data, void *result_data)
+{
+    sleep(1);
+    i32 *params = (i32 *) param_data;
+    *params += 20;
+    i32 *results = (i32 *) result_data;
+    *results = *params;
+    return true;
+}
+
+LOCAL void fake_job_callback(Job_Status status, void *result_data)
+{
+    if (status != JOB_STATUS_COMPLETED) {
+        LOG_ERROR("fake job failed\n");
+        return;
+    }
+
+    i32 *result = (i32 *) result_data;
+    LOG_DEBUG("fake result = %i\n", *result);
+}
+
 LOCAL bool client_on_key_pressed_event(Event_Code code, Event_Data data)
 {
     UNUSED(code);
@@ -484,6 +510,9 @@ LOCAL bool client_on_key_pressed_event(Event_Code code, Event_Data data)
             UNUSED(c);
             return true;
         }
+    } else if (key == KEYCODE_J) {
+        i32 param = -420;
+        job_system_submit(fake_job_entry_point, &param, sizeof(i32), fake_job_callback, sizeof(i32));
     }
 
     return false;
@@ -692,6 +721,8 @@ int main(int argc, char **argv)
     mem_init(&mem_stats);
     log_init(&log_registry);
 
+    console_init();
+
     if (!event_system_init(&registered_events)) {
         LOG_FATAL("failed to initialize event system\n");
         exit(EXIT_FAILURE);
@@ -702,7 +733,10 @@ int main(int argc, char **argv)
     arena_allocator_create_tagged(MiB(1), 0, &log_registry.allocator, MEMORY_TAG_LOG);
     log_registry.logs = (Log_Entry *) darray_create(sizeof(Log_Entry));
 
-    console_init();
+    if (!job_system_init(&job_system, CLIENT_JOB_SYSTEM_NUM_WORKERS)) {
+        LOG_FATAL("failed to initialize job system\n");
+        exit(EXIT_FAILURE);
+    }
 
     const char *const program = shift(&argc, &argv);
     const char *server_ip_address = NULL;
@@ -826,6 +860,7 @@ int main(int argc, char **argv)
     global_data.ms = &mem_stats;
     global_data.lr = &log_registry;
     global_data.re = &registered_events;
+    global_data.js = &job_system;
     global_data.current_window_width = WINDOW_WIDTH;
     global_data.current_window_height = WINDOW_HEIGHT;
     global_data.is_polygon_mode = false;
@@ -850,6 +885,28 @@ int main(int argc, char **argv)
     global_data.client_socket = client_socket;
     global_data.client_update_freq = 60.0f;
     global_data.client_update_period = 1.0f / global_data.client_update_freq;
+
+    // NOTE: Skybox has to have its memory initialized here, because if we reload libgame,
+    // the function addresses of job entry points which the job system saved would change,
+    // thus resulting in a segfault.
+    Skybox_Create_Info skybox_create_info = {
+        .debug_only = false,
+        .face_filepaths = {
+            "assets/textures/skybox/nebula/right.jpg",
+            "assets/textures/skybox/nebula/left.jpg",
+            "assets/textures/skybox/nebula/top.jpg",
+            "assets/textures/skybox/nebula/bottom.jpg",
+            "assets/textures/skybox/nebula/front.jpg",
+            "assets/textures/skybox/nebula/back.jpg"
+        }
+    };
+
+    game.skybox = (Skybox *) mem_alloc(sizeof(Skybox), MEMORY_TAG_GAME);
+
+    bool skybox_create_result; UNUSED(skybox_create_result);
+    skybox_create_result = skybox_create(&skybox_create_info, game.skybox);
+    ASSERT(skybox_create_result);
+
     game_init(&game);
 
     // Request to join
@@ -890,10 +947,13 @@ int main(int argc, char **argv)
         renderer2d_end_scene(renderer2d);
 
         net_update(delta_time);
+        job_system_update();
 
         window_swap_buffers();
         window_poll_events();
     }
+
+    LOG_INFO("shutting down the client\n");
 
     game_shutdown(&game);
 
@@ -914,8 +974,9 @@ int main(int argc, char **argv)
     }
 
     window_destroy();
-
     renderer2d_destroy(renderer2d);
+    job_system_shutdown();
+    console_shutdown();
 
     event_system_unregister(EVENT_CODE_KEY_PRESSED, console_on_key_pressed_event);
     event_system_unregister(EVENT_CODE_KEY_REPEATED, console_on_key_repeated_event);
@@ -932,8 +993,6 @@ int main(int argc, char **argv)
 
     arena_allocator_destroy(&log_registry.allocator);
     darray_destroy(log_registry.logs);
-
-    console_shutdown();
 
     pthread_kill(network_thread, SIGINT);
     pthread_join(network_thread, NULL);

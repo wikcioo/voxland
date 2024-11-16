@@ -227,6 +227,8 @@ void renderer2d_destroy(Renderer2D *renderer2d)
     FT_Done_FreeType(ft);
 
     mem_free(renderer2d, sizeof(Renderer2D), MEMORY_TAG_RENDERER2D);
+
+    LOG_INFO("renderer2d destroyed successfully\n");
 }
 
 void renderer2d_begin_scene(Renderer2D *renderer2d, const glm::mat4 *projection)

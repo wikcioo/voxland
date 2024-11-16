@@ -4,6 +4,7 @@
 
 #include "common/log.h"
 #include "common/net.h"
+#include "common/job.h"
 #include "common/event.h"
 #include "common/defines.h"
 #include "client/renderer2d.h"
@@ -21,6 +22,7 @@ typedef struct {
     Memory_Stats *ms;
     Log_Registry *lr;
     Registered_Event (*re)[NUM_OF_EVENT_CODES];
+    Job_System *js;
     GLFWwindow *window;
     u32 current_window_width;
     u32 current_window_height;

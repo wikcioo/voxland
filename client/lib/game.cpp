@@ -8,6 +8,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
+#include "client/client.h"
 #include "client/global.h"
 #include "common/log.h"
 #include "common/packet.h"
@@ -77,6 +78,7 @@ void game_post_reload(Game *game)
     mem_init(game->global_data->ms);
     log_init(game->global_data->lr);
     event_system_init(game->global_data->re);
+    job_system_init(game->global_data->js, CLIENT_JOB_SYSTEM_NUM_WORKERS);
 }
 
 void game_init(Game *game)
@@ -109,21 +111,6 @@ void game_init(Game *game)
 
     shader_create_result = shader_create(&voxel_shader_create_info, &game->voxel_shader);
     ASSERT(shader_create_result);
-
-    bool skybox_create_result;
-    UNUSED(skybox_create_result);
-
-    game->skybox = (Skybox *) mem_alloc(sizeof(Skybox), MEMORY_TAG_GAME);
-
-    Skybox_Create_Info skybox_create_info = {
-        .debug = true,
-        .face_filepaths = {
-            "assets/textures/prototypes/texture_06.png",
-        }
-    };
-
-    skybox_create_result = skybox_create(&skybox_create_info, game->skybox);
-    ASSERT(skybox_create_result);
 
     f32 vertices[] = {
         -0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
@@ -323,6 +310,8 @@ void game_shutdown(Game *game)
     mem_free(game->voxel_data, num_instances * sizeof(Voxel_Data), MEMORY_TAG_GAME);
     skybox_destroy(game->skybox);
     mem_free(game->skybox, sizeof(Skybox), MEMORY_TAG_GAME);
+
+    LOG_INFO("game shutdown complete\n");
 }
 
 } // extern "C"

@@ -8,7 +8,7 @@
 #define SKYBOX_NUM_FACES 6
 
 typedef struct {
-    bool debug;
+    bool debug_only;
     const char *face_filepaths[SKYBOX_NUM_FACES];
 } Skybox_Create_Info;
 
