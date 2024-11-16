@@ -2,6 +2,7 @@
 
 #include "common/memory/memutils.h"
 #include "src/collections/darray_tests.h"
+#include "src/collections/ring_queue_tests.h"
 #include "src/memory/arena_allocator_tests.h"
 
 int main(void)
@@ -12,6 +13,7 @@ int main(void)
     test_manager_init();
 
     darray_register_tests();
+    ring_queue_register_tests();
     arena_allocator_register_tests();
 
     test_manager_run_all_tests();

@@ -14,6 +14,7 @@ LOCAL const char *memory_tag_strings[MEMORY_TAG_COUNT] = {
     "array     ",
     "darray    ",
     "gen_arena ",
+    "gen_ring  ",
     "renderer2d",
     "game      ",
     "opengl    ",
