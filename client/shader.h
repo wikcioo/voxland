@@ -10,6 +10,7 @@ typedef struct {
 
 typedef struct {
     const char *vertex_filepath;
+    const char *geometry_filepath;
     const char *fragment_filepath;
 } Shader_Create_Info;
 
@@ -26,3 +27,4 @@ void shader_set_uniform_vec2(Shader *shader, const char *name, const glm::vec2 *
 void shader_set_uniform_vec3(Shader *shader, const char *name, const glm::vec3 *data);
 void shader_set_uniform_vec4(Shader *shader, const char *name, const glm::vec4 *data);
 void shader_set_uniform_mat4(Shader *shader, const char *name, const glm::mat4 *data);
+void shader_set_uniform_mat4_array(Shader *shader, const char *name, const glm::mat4 *data, u32 length);

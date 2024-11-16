@@ -196,6 +196,7 @@ bool skybox_create(Skybox_Create_Info *create_info, Skybox *out_skybox)
 
     Shader_Create_Info skybox_create_info = {
         .vertex_filepath = "assets/shaders/skybox.vert",
+        .geometry_filepath = NULL,
         .fragment_filepath = "assets/shaders/skybox.frag"
     };
 

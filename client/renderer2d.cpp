@@ -524,6 +524,7 @@ LOCAL void create_shaders(Renderer2D *renderer2d)
 {
     Shader_Create_Info quad_shader_create_info = {
         .vertex_filepath = "assets/shaders/quad.vert",
+        .geometry_filepath = NULL,
         .fragment_filepath = "assets/shaders/quad.frag"
     };
 
@@ -533,6 +534,7 @@ LOCAL void create_shaders(Renderer2D *renderer2d)
 
     Shader_Create_Info circle_shader_create_info = {
         .vertex_filepath = "assets/shaders/circle.vert",
+        .geometry_filepath = NULL,
         .fragment_filepath = "assets/shaders/circle.frag"
     };
 
@@ -542,6 +544,7 @@ LOCAL void create_shaders(Renderer2D *renderer2d)
 
     Shader_Create_Info line_shader_create_info = {
         .vertex_filepath = "assets/shaders/line.vert",
+        .geometry_filepath = NULL,
         .fragment_filepath = "assets/shaders/line.frag"
     };
 
@@ -551,6 +554,7 @@ LOCAL void create_shaders(Renderer2D *renderer2d)
 
     Shader_Create_Info text_shader_create_info = {
         .vertex_filepath = "assets/shaders/text.vert",
+        .geometry_filepath = NULL,
         .fragment_filepath = "assets/shaders/text.frag"
     };
 

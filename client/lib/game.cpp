@@ -90,6 +90,7 @@ void game_init(Game *game)
 
     Shader_Create_Info flat_color_shader_create_info = {
         .vertex_filepath = "assets/shaders/flat_color.vert",
+        .geometry_filepath = NULL,
         .fragment_filepath = "assets/shaders/flat_color.frag"
     };
 
@@ -98,6 +99,7 @@ void game_init(Game *game)
 
     Shader_Create_Info lighting_shader_create_info = {
         .vertex_filepath = "assets/shaders/lighting.vert",
+        .geometry_filepath = NULL,
         .fragment_filepath = "assets/shaders/lighting.frag"
     };
 
@@ -106,6 +108,7 @@ void game_init(Game *game)
 
     Shader_Create_Info voxel_shader_create_info = {
         .vertex_filepath = "assets/shaders/voxel.vert",
+        .geometry_filepath = NULL,
         .fragment_filepath = "assets/shaders/voxel.frag"
     };
 
