@@ -60,6 +60,7 @@ typedef struct {
 } Log_Entry;
 
 typedef struct {
+    bool alloc_ready;
     Arena_Allocator allocator;
     Log_Entry *logs; // darray
 } Log_Registry;

@@ -2,11 +2,13 @@
 
 #include <stdio.h>
 #include <sys/stat.h>
+#include <errno.h>
+#include <string.h>
 
 #include "log.h"
 #include "asserts.h"
 
-bool filesystem_open(const char *path, File_Mode modes, bool is_binary, File_Handle *out_handle)
+bool filesystem_open(const char *path, u32 modes, bool is_binary, File_Handle *out_handle)
 {
     ASSERT(path);
     ASSERT(out_handle);
@@ -15,7 +17,11 @@ bool filesystem_open(const char *path, File_Mode modes, bool is_binary, File_Han
     out_handle->is_valid = false;
 
     const char *modes_str = NULL;
-    if (modes & FILE_MODE_READ) {
+    if (modes & FILE_MODE_READ && modes & FILE_MODE_WRITE) {
+        modes_str = is_binary ? "w+b" : "w+";
+    } else if (modes & FILE_MODE_READ && modes & FILE_MODE_APPEND) {
+        modes_str = is_binary ? "a+b" : "a+";
+    } else if (modes & FILE_MODE_READ) {
         modes_str = is_binary ? "rb" : "r";
     } else if (modes & FILE_MODE_WRITE) {
         modes_str = is_binary ? "wb" : "w";
@@ -27,7 +33,7 @@ bool filesystem_open(const char *path, File_Mode modes, bool is_binary, File_Han
 
     FILE *file = fopen(path, modes_str);
     if (file == NULL) {
-        LOG_ERROR("failed to open file at `%s`\n", path);
+        LOG_ERROR("failed to open file at `%s`: %s\n", path, strerror(errno));
         return false;
     }
 
@@ -84,4 +90,18 @@ bool filesystem_read_all(const File_Handle *handle, void *buffer, u64 *out_bytes
     }
 
     return bytes_read == file_size;
+}
+
+bool filesystem_write(const File_Handle *handle, void *buffer, u64 size)
+{
+    ASSERT(handle);
+    ASSERT(buffer);
+
+    if (!(handle->modes & FILE_MODE_WRITE || handle->modes & FILE_MODE_APPEND)) {
+        LOG_ERROR("file not opened in write mode\n");
+        return false;
+    }
+
+    u64 bytes_written = fwrite(buffer, size, 1, (FILE *) handle->handle);
+    return bytes_written == size;
 }

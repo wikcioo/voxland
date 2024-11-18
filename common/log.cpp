@@ -55,6 +55,10 @@ void log_message(Log_Level level, const char *message, ...)
         return;
     }
 
+    if (!log_registry->alloc_ready) {
+        return;
+    }
+
     if (!arena_allocator_can_allocate(&log_registry->allocator, strlen(formatted_message_buffer)+1)) {
         fprintf(stderr, ERROR_COLOR "ran out of free space for logs in the registry\n" RESET_COLOR);
         return;

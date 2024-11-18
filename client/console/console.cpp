@@ -13,7 +13,9 @@
 #include "commands.h"
 #include "command_manager.h"
 #include "common/log.h"
+#include "common/clock.h"
 #include "common/asserts.h"
+#include "common/filesystem.h"
 #include "common/string_view.h"
 #include "common/collections/darray.h"
 
@@ -30,6 +32,8 @@
 #define CONSOLE_INPUT_PAD_Y_RATIO_TO_FONT 1.25f
 
 #define CONSOLE_CURSOR_BLINK_PERIOD 0.5f
+
+#define COMMAND_HISTORY_FILEPATH "./.command_history"
 
 typedef enum {
     CONSOLE_HIDDEN,
@@ -56,14 +60,17 @@ typedef struct {
     Console_Cmd *history; // darray
     Font_Atlas_Size font_size;
     char **logs; // darray
+    File_Handle command_history_file_handle;
 } Console;
 
 LOCAL Console console = {};
+
 LOCAL glm::vec3 console_input_bg_color = glm::vec3(0.075f, 0.39f, 0.37f);
 LOCAL glm::vec3 console_cursor_color = glm::vec3(0.35f, 0.65f, 0.26f);
 LOCAL glm::vec3 console_text_color = glm::vec3(0.9f);
 LOCAL glm::vec3 console_bg_color = glm::vec3(0.17f, 0.035f, 0.2f);
 
+LOCAL void console_load_command_history(void);
 LOCAL bool console_exec_from_argv(u32 argc, char **argv);
 LOCAL bool console_exec_from_input(void);
 LOCAL void console_handle_backspace();
@@ -74,10 +81,9 @@ extern Log_Registry log_registry;
 void console_init(void)
 {
     console.font_size = FA16;
-    console.history_cursor = -1;
-    console.history = (Console_Cmd *) darray_create(sizeof(Console_Cmd));
     console.logs = (char **) darray_create(sizeof(char *));
 
+    console_load_command_history();
     cmd_register_all();
 }
 
@@ -305,6 +311,48 @@ bool console_on_app_log_event(Event_Code code, Event_Data data)
     return false;
 }
 
+LOCAL void console_load_command_history(void)
+{
+    console.history_cursor = -1;
+    console.history = (Console_Cmd *) darray_create(sizeof(Console_Cmd));
+
+    if (!filesystem_open(COMMAND_HISTORY_FILEPATH, FILE_MODE_READ | FILE_MODE_APPEND, false, &console.command_history_file_handle)) {
+        LOG_ERROR("failed to open command history file\n");
+        return;
+    }
+
+    u64 size = 0;
+    filesystem_get_size(&console.command_history_file_handle, &size);
+
+    if (size == 0) {
+        return;
+    }
+
+    u64 start_time = clock_get_absolute_time_ns();
+
+    // TODO: Replace with scratch buffer.
+    char *buffer = (char *) mem_alloc(size, MEMORY_TAG_LOG);
+
+    if (!filesystem_read_all(&console.command_history_file_handle, buffer, &size)) {
+        LOG_ERROR("failed to read all bytes from command history file\n");
+    }
+
+    Console_Cmd cmd = {};
+
+    char *token = strtok(buffer, "\n");
+    while (token != NULL) {
+        cmd.length = (u32) strlen(token);
+        mem_copy(cmd.input, token, cmd.length);
+        darray_push(console.history, cmd);
+        token = strtok(NULL, "\n");
+    }
+
+    mem_free(buffer, size, MEMORY_TAG_LOG);
+
+    u64 end_time = clock_get_absolute_time_ns();
+    LOG_INFO("loaded command history in %f seconds\n", (f32) (end_time - start_time) / 1e9);
+}
+
 LOCAL bool console_exec_from_argv(u32 argc, char **argv)
 {
     while (argc > 0) {
@@ -323,6 +371,11 @@ LOCAL bool console_exec_from_input(void)
     cmd.length = console.cursor;
     memcpy(cmd.input, console.input, console.cursor);
     darray_push(console.history, cmd);
+
+    char buffer[CONSOLE_MAX_INPUT_SIZE+1] = {};
+    mem_copy(buffer, cmd.input, cmd.length);
+    buffer[cmd.length] = '\n';
+    filesystem_write(&console.command_history_file_handle, buffer, cmd.length+1);
 
     u32 argc = 0;
     char *argv[CONSOLE_ARGV_CAPACITY] = {};

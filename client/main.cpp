@@ -732,6 +732,7 @@ int main(int argc, char **argv)
 
     arena_allocator_create_tagged(MiB(1), 0, &log_registry.allocator, MEMORY_TAG_LOG);
     log_registry.logs = (Log_Entry *) darray_create(sizeof(Log_Entry));
+    log_registry.alloc_ready = true;
 
     if (!job_system_init(&job_system, CLIENT_JOB_SYSTEM_NUM_WORKERS)) {
         LOG_FATAL("failed to initialize job system\n");
