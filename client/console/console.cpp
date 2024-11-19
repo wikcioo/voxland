@@ -343,6 +343,7 @@ LOCAL void console_load_command_history(void)
     while (token != NULL) {
         cmd.length = (u32) strlen(token);
         mem_copy(cmd.input, token, cmd.length);
+        cmd.input[cmd.length] = '\0';
         darray_push(console.history, cmd);
         token = strtok(NULL, "\n");
     }
@@ -363,8 +364,30 @@ LOCAL bool console_exec_from_argv(u32 argc, char **argv)
     return true;
 }
 
+LOCAL void console_trim_input(void)
+{
+    i32 start = 0;
+    while (console.input[start] != '\0' && isspace(console.input[start])) {
+        start++;
+    }
+
+    i32 end = console.cursor - 1;
+    while (end >= start && isspace(console.input[end])) {
+        end--;
+    }
+
+    console.cursor = end - start + 1;
+
+    i32 i = 0;
+    for (; start <= end; start++) {
+        console.input[i++] = console.input[start];
+    }
+    console.input[i] = '\0';
+}
+
 LOCAL bool console_exec_from_input(void)
 {
+    console_trim_input();
     LOG_INFO("$ %s\n", console.input);
 
     Console_Cmd cmd = {};
