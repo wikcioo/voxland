@@ -42,6 +42,11 @@ typedef enum {
     NUM_OF_CONSOLE_STATES
 } Console_State;
 
+typedef enum {
+    INPUT_NORMAL,
+    INPUT_REVERSE_SEARCH
+} Console_Input_State;
+
 typedef struct {
     u32 length;
     char input[CONSOLE_MAX_INPUT_SIZE+1];
@@ -49,6 +54,7 @@ typedef struct {
 
 typedef struct {
     Console_State state;
+    Console_Input_State input_state;
     bool is_changing_state;
     f32 target_height;
     f32 current_height;
@@ -56,6 +62,11 @@ typedef struct {
     bool cursor_visible;
     f32 cursor_blink_accumulator;
     char input[CONSOLE_MAX_INPUT_SIZE+1];
+    bool reverse_search_failed;
+    u32 reverse_search_result_length;
+    u32 reverse_search_start_index;
+    u32 reverse_search_result_index;
+    char reverse_search_result[CONSOLE_MAX_INPUT_SIZE+1];
     i32 history_cursor;
     Console_Cmd *history; // darray
     Font_Atlas_Size font_size;
@@ -73,13 +84,18 @@ LOCAL glm::vec3 console_bg_color = glm::vec3(0.17f, 0.035f, 0.2f);
 LOCAL void console_load_command_history(void);
 LOCAL bool console_exec_from_argv(u32 argc, char **argv);
 LOCAL bool console_exec_from_input(void);
-LOCAL void console_handle_backspace();
+LOCAL void console_handle_backspace(void);
+LOCAL bool console_normal_process_key(u16 key);
+LOCAL bool console_reverse_search_process_key(u16 key);
 LOCAL bool console_process_key(u16 key);
+LOCAL void console_reverse_search_update(void);
+LOCAL bool console_reverse_search_find_next(void);
 
 extern Log_Registry log_registry;
 
 void console_init(void)
 {
+    console.input_state = INPUT_NORMAL;
     console.font_size = FA16;
     console.logs = (char **) darray_create(sizeof(char *));
 
@@ -150,26 +166,60 @@ void console_update(Renderer2D *renderer2d, const glm::mat4 *ui_projection, u32 
     renderer2d_draw_quad(renderer2d, console_position, console_size, console_bg_color);
     renderer2d_draw_quad(renderer2d, input_box_position, input_box_size, console_input_bg_color);
 
-    // Input
-    char text_buffer[CONSOLE_PROMPT_LEN + CONSOLE_MAX_INPUT_SIZE + 1] = {};
-    snprintf(text_buffer, sizeof(text_buffer), "%.*s%.*s", CONSOLE_PROMPT_LEN, CONSOLE_PROMPT, console.cursor, console.input);
-    renderer2d_draw_text(renderer2d, text_buffer, console.font_size, input_text_position, console_text_color);
+    glm::vec2 cursor_position;
+    glm::vec2 cursor_size;
+
+    if (console.input_state == INPUT_NORMAL) {
+        char text_buffer[CONSOLE_PROMPT_LEN + CONSOLE_MAX_INPUT_SIZE + 1] = {};
+        snprintf(text_buffer, sizeof(text_buffer), "%s%.*s", CONSOLE_PROMPT, console.cursor, console.input);
+        renderer2d_draw_text(renderer2d, text_buffer, console.font_size, input_text_position, console_text_color);
+
+        cursor_position = glm::vec2(
+            input_text_position.x + (f32) (CONSOLE_PROMPT_LEN + console.cursor) * font_width + font_width * 0.5f,
+            input_box_position.y
+        );
+        cursor_size = glm::vec2(font_width, font_height);
+    } else if (console.input_state == INPUT_REVERSE_SEARCH) {
+        PERSIST const char *failed_as_cstr = "failed-";
+        PERSIST u32 failed_as_cstr_len = (u32) strlen(failed_as_cstr);
+        PERSIST const char *reverse_search_as_cstr = "reverse-search";
+        PERSIST u32 reverse_search_as_cstr_len = (u32) strlen(reverse_search_as_cstr);
+
+        char text_buffer[32 + CONSOLE_MAX_INPUT_SIZE + 1] = {};
+        snprintf(text_buffer, sizeof(text_buffer), "(%s%s)'%.*s`: %.*s",
+                 console.reverse_search_failed ? failed_as_cstr : "",
+                 reverse_search_as_cstr,
+                 console.cursor, console.input,
+                 console.reverse_search_result_length, console.reverse_search_result);
+        renderer2d_draw_text(renderer2d, text_buffer, console.font_size, input_text_position, console_text_color);
+
+        if (console.cursor == 0) {
+            cursor_position = glm::vec2(
+                input_text_position.x + (f32) (console.cursor + reverse_search_as_cstr_len + 6) * font_width + font_width * 0.5f,
+                input_box_position.y
+            );
+            cursor_size = glm::vec2(font_width, font_height);
+        } else {
+            u32 offset = (failed_as_cstr_len * console.reverse_search_failed) + (reverse_search_as_cstr_len + 6) + console.cursor + console.reverse_search_start_index;
+            cursor_size = glm::vec2(
+                font_width * (console.reverse_search_failed ? 1.0f : (f32) console.cursor),
+                font_height
+            );
+            cursor_position = glm::vec2(
+                input_text_position.x + (f32) offset * font_width + cursor_size.x * 0.5f,
+                input_box_position.y
+            );
+        }
+    }
 
     // Cursor
-    glm::vec2 cursor_position = glm::vec2(
-        input_text_position.x + (f32) (CONSOLE_PROMPT_LEN + console.cursor) * font_width + font_width * 0.5f,
-        input_box_position.y
-    );
-
-    glm::vec2 cursor_size = glm::vec2(font_width, font_height);
-
     console.cursor_blink_accumulator += dt;
     if (console.cursor_blink_accumulator >= CONSOLE_CURSOR_BLINK_PERIOD) {
         console.cursor_visible = !console.cursor_visible;
         console.cursor_blink_accumulator = 0.0f;
     }
 
-    if (console.cursor_visible) {
+    if (console.cursor_visible || (console.input_state == INPUT_REVERSE_SEARCH && console.cursor > 0)) {
         renderer2d_draw_quad(renderer2d, cursor_position, cursor_size, console_cursor_color);
     }
 
@@ -263,6 +313,32 @@ bool console_on_key_pressed_event(Event_Code code, Event_Data data)
         }
 
         return true;
+    } else if (key == KEYCODE_R && input_is_key_pressed(KEYCODE_LeftControl)) {
+        if (console.state == CONSOLE_HIDDEN) {
+            return false;
+        }
+
+        if (console.input_state == INPUT_REVERSE_SEARCH && console.cursor > 0) {
+            console.reverse_search_result_index += 1;
+            console_reverse_search_find_next();
+        } else {
+            console.reverse_search_result_index = 0;
+            console.input_state = INPUT_REVERSE_SEARCH;
+        }
+        return true;
+    } else if (key == KEYCODE_C && input_is_key_pressed(KEYCODE_LeftControl)) {
+        if (console.state == CONSOLE_HIDDEN) {
+            return false;
+        }
+
+        console.input_state = INPUT_NORMAL;
+        console.cursor = 0;
+        mem_zero(console.input, sizeof(console.input));
+        console.reverse_search_failed = false;
+        console.reverse_search_start_index = 0;
+        console.reverse_search_result_length = 0;
+        mem_zero(console.reverse_search_result, sizeof(console.reverse_search_result));
+        return true;
     } else {
         if (console_process_key(key)) {
             return true;
@@ -299,6 +375,10 @@ bool console_on_char_pressed_event(Event_Code code, Event_Data data)
     console.input[console.cursor++] = (char) data.U32[0];
     console.cursor_blink_accumulator = 0.0f;
     console.cursor_visible = true;
+
+    if (console.input_state == INPUT_REVERSE_SEARCH) {
+        console_reverse_search_update();
+    }
 
     return true;
 }
@@ -418,7 +498,7 @@ LOCAL bool console_exec_from_input(void)
     return result;
 }
 
-LOCAL void console_handle_backspace()
+LOCAL void console_handle_backspace(void)
 {
     if (console.cursor <= 0) {
         return;
@@ -452,12 +532,8 @@ _end:
     console.cursor_visible = true;
 }
 
-LOCAL bool console_process_key(u16 key)
+LOCAL bool console_normal_process_key(u16 key)
 {
-    if (console.state == CONSOLE_HIDDEN) {
-        return false;
-    }
-
     if (key == KEYCODE_Backspace) {
         console_handle_backspace();
         return true;
@@ -495,6 +571,75 @@ LOCAL bool console_process_key(u16 key)
         console.cursor = 0;
     } else if (key >= KEYCODE_Space && key <= KEYCODE_Z) {
         return true;
+    }
+
+    return false;
+}
+
+LOCAL bool console_reverse_search_process_key(u16 key)
+{
+    if (key == KEYCODE_Backspace) {
+        console_handle_backspace();
+        console_reverse_search_update();
+        return true;
+    } else if (key == KEYCODE_Tab) {
+        console.input_state = INPUT_NORMAL;
+        console.cursor = console.reverse_search_result_length;
+        mem_copy(console.input, console.reverse_search_result, console.reverse_search_result_length);
+        mem_zero(console.reverse_search_result, console.reverse_search_result_length);
+        console.reverse_search_result_length = 0;
+        return true;
+    } else if (key >= KEYCODE_Space && key <= KEYCODE_Z) {
+        return true;
+    }
+
+    return false;
+}
+
+LOCAL bool console_process_key(u16 key)
+{
+    if (console.state == CONSOLE_HIDDEN) {
+        return false;
+    }
+
+    if (console.input_state == INPUT_NORMAL) {
+        return console_normal_process_key(key);
+    } else if (console.input_state == INPUT_REVERSE_SEARCH) {
+        return console_reverse_search_process_key(key);
+    }
+
+    return false;
+}
+
+LOCAL void console_reverse_search_update(void)
+{
+    if (console.cursor == 0) {
+        console.reverse_search_result_index = 0;
+        console.reverse_search_result_length = 0;
+        console.reverse_search_failed = false;
+        return;
+    }
+
+    if (!console_reverse_search_find_next()) {
+        console.reverse_search_start_index = 0;
+        console.reverse_search_failed = true;
+    }
+}
+
+LOCAL bool console_reverse_search_find_next(void)
+{
+    u32 counter = 0;
+    u64 history_len = darray_length(console.history);
+    for (i64 i = history_len - 1; i >= 0; i--) {
+        Console_Cmd *cmd = &console.history[i];
+        char *pos = strcasestr(cmd->input, console.input);
+        if (pos != NULL && counter++ >= console.reverse_search_result_index) {
+            console.reverse_search_start_index = (u32) (pos - cmd->input);
+            console.reverse_search_result_length = cmd->length;
+            mem_copy(console.reverse_search_result, cmd->input, cmd->length);
+            console.reverse_search_failed = false;
+            return true;
+        }
     }
 
     return false;
