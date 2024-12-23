@@ -91,7 +91,7 @@ LOCAL bool skybox_job_load_face_entry_point(void *param_data, void *result_data)
     i32 width, height, nr_channels;
     u8 *image_data = stbi_load(params->image_filepath, &width, &height, &nr_channels, STBI_default);
     if (image_data == NULL) {
-        LOG_ERROR("failed to load cubemap face at `%s`\n", params->image_filepath);
+        LOG_ERROR("failed to load cubemap face at `%s`: %s\n", params->image_filepath, stbi_failure_reason());
         stbi_image_free(image_data);
         return false;
     }
@@ -154,10 +154,12 @@ bool skybox_create(Skybox_Create_Info *create_info, Skybox *out_skybox)
     i32 width, height, nr_channels;
     u8 *debug_image_data = stbi_load(SKYBOX_DEBUG_TEXTURE_FILEPATH, &width, &height, &nr_channels, STBI_default);
 
+    ASSERT(debug_image_data != NULL);
+
     if (!create_info->debug_only) {
         i32 w, h, c;
         if (!stbi_info(create_info->face_filepaths[0], &w, &h, &c)) {
-            LOG_ERROR("failed to read image dimensions for `%s`\n", create_info->face_filepaths[0]);
+            LOG_ERROR("failed to read image dimensions for `%s`: %s\n", create_info->face_filepaths[0], stbi_failure_reason());
             return false;
         }
 

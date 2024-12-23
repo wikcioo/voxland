@@ -92,7 +92,7 @@ bool shader_create(const Shader_Create_Info *create_info, Shader *out_shader)
     {
         char info_log[1024];
         glGetShaderInfoLog(vertex_shader, 1024, 0, info_log);
-        LOG_ERROR("failed to compile vertex shader: %s", info_log);
+        LOG_ERROR("failed to compile vertex shader at `%s`: %s", create_info->vertex_filepath, info_log);
     }
 
     u32 geometry_shader = 0;
@@ -106,7 +106,7 @@ bool shader_create(const Shader_Create_Info *create_info, Shader *out_shader)
         {
             char info_log[1024];
             glGetShaderInfoLog(geometry_shader, 1024, 0, info_log);
-            LOG_ERROR("failed to compile geometry shader: %s", info_log);
+            LOG_ERROR("failed to compile geometry shader at `%s`: %s", create_info->geometry_filepath, info_log);
         }
     }
 
@@ -119,7 +119,7 @@ bool shader_create(const Shader_Create_Info *create_info, Shader *out_shader)
     {
         char info_log[1024];
         glGetShaderInfoLog(fragment_shader, 1024, 0, info_log);
-        LOG_ERROR("failed to compile fragment shader: %s", info_log);
+        LOG_ERROR("failed to compile fragment shader at `%s`: %s", create_info->fragment_filepath, info_log);
     }
 
     mem_free(vertex_source_buffer, vertex_file_size+1, MEMORY_TAG_OPENGL);
